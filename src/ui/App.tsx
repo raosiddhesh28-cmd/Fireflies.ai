@@ -298,7 +298,7 @@ function Home(props: {
           .map((c) => (
             <button key={c.id} className="row" onClick={() => props.onOpen(c)}>
               <span>{c.text}</span>
-              <StatusChip state={c.state} />
+              <StatusChip state={c.state} audience="requester" />
             </button>
           ))}
       </section>
@@ -552,15 +552,27 @@ function Modal(props: { title: string; onClose: () => void; children: ReactNode 
   );
 }
 
-function StatusChip({ state }: { state: string }) {
-  return <span className={`chip ${state}`}>{label(state)}</span>;
+function StatusChip({ state, audience = "owner" }: { state: string; audience?: "owner" | "requester" }) {
+  return <span className={`chip ${state}`}>{label(state, audience)}</span>;
 }
 
 function Empty({ text }: { text: string }) {
   return <p className="empty">{text}</p>;
 }
 
-function label(state: string) {
+function label(state: string, audience: "owner" | "requester" = "owner") {
+  if (audience === "requester") {
+    const requester: Record<string, string> = {
+      needs_confirmation: "Ownership not confirmed",
+      handoff_pending: "Ownership not confirmed",
+      needs_ownership: "Needs ownership",
+      open: "Acknowledged, open",
+      completed: "Completed",
+      declined: "Declined",
+      dropped: "Dropped",
+    };
+    return requester[state] ?? state;
+  }
   const map: Record<string, string> = {
     needs_confirmation: "Needs your opt-in",
     handoff_pending: "Proposed to you",
