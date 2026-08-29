@@ -81,7 +81,10 @@ blockquote {
 .chip.open { background: #163528; color: var(--good); }
 .chip.completed { background: #163528; color: var(--good); }
 .chip.declined, .chip.dropped { background: #243049; color: #c9d4e5; }
-.chip.needs_ownership { background: #2a2438; }
+.card.priority { border-color: #8b7cff; box-shadow: inset 0 0 0 1px #8b7cff55; }
+.flag-block { margin-top: 1rem; }
+.chip.not_accepted { background: #2a2438; }
+.chip.not_started, .chip.deadline_missed, .chip.communication_failure { background: #2a2430; color: #d7c7ff; }
 .toast, .error {
   margin: 0.6rem 0;
   padding: 0.7rem 0.9rem;

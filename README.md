@@ -33,3 +33,14 @@ Demo users: Alex (proposed owner), Blair (requester), Casey (redirect target), D
 `open` → `completed` · `declined` · `dropped` · resurface overlay (max 3, same recurring series)
 
 Redirect never sets `ownerId`. The target must accept.
+
+## Status categories
+
+Lifecycle (`needs_confirmation` → `open` → `completed`/`declined`/`dropped`) is unchanged.
+
+Granular `statusCategory` values cover not accepted, wrong owner, not started, competing priorities, dependency missing/delayed, partial completion, quality failure, rework, requirement changed, resource unavailable, communication failure, and deadline missed.
+
+- Loose ends and new extractions default to **Not accepted**.
+- Decline requires a categorized reason.
+- Dependency flags stay `open`.
+- Quality flags hold completion instead of archiving.

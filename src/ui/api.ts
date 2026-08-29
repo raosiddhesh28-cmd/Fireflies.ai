@@ -21,6 +21,21 @@ export interface Meeting {
   cancelled: boolean;
 }
 
+export type StatusCategory =
+  | "not_accepted"
+  | "wrong_owner"
+  | "not_started"
+  | "competing_priorities"
+  | "dependency_missing"
+  | "dependency_delayed"
+  | "partial_completion"
+  | "quality_failure"
+  | "rework"
+  | "requirement_changed"
+  | "resource_unavailable"
+  | "communication_failure"
+  | "deadline_missed";
+
 export interface Commitment {
   id: string;
   text: string;
@@ -35,6 +50,8 @@ export interface Commitment {
   extractedAt: string;
   resurfaceCount: number;
   clarification: string | null;
+  statusCategory: StatusCategory;
+  verificationHold: boolean;
 }
 
 export interface ManagerRollup {

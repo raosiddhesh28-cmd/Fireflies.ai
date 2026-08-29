@@ -4,6 +4,13 @@ import {
   type Commitment,
   type CommitmentState,
 } from "./types.js";
+import {
+  isDeclineReason,
+  isExecutionFlag,
+  isQualityFlag,
+  type DeclineReason,
+  type ExecutionFlag,
+} from "./statusCategories.js";
 
 export class ConsentError extends Error {
   constructor(message: string) {
@@ -56,6 +63,8 @@ export function fromExtraction(
     suppressMeetingId: null,
     lastResurfacedMeetingId: null,
     clarification: null,
+    statusCategory: "not_accepted",
+    verificationHold: false,
   };
 }
 
@@ -71,6 +80,7 @@ export function expireProposal(commitment: Commitment, now: Date): Commitment {
     state: "needs_ownership",
     proposedOwnerId: null,
     ownerId: null,
+    statusCategory: "not_accepted",
   });
 }
 
@@ -87,6 +97,8 @@ export function accept(commitment: Commitment, actorId: string, now: Date): Comm
     proposedOwnerId: actorId,
     acceptedAt: now.toISOString(),
     redirectedBy: null,
+    statusCategory: "not_started",
+    verificationHold: false,
   });
 }
 
@@ -101,6 +113,7 @@ export function dismissToBucket(commitment: Commitment, actorId: string, now: Da
     state: "needs_ownership",
     proposedOwnerId: null,
     ownerId: null,
+    statusCategory: "not_accepted",
   });
 }
 
@@ -127,6 +140,8 @@ export function redirect(
     redirectedBy: actorId,
     acceptedAt: null,
     resolvedAt: null,
+    statusCategory: "not_accepted",
+    verificationHold: false,
   });
 }
 
@@ -139,6 +154,8 @@ export function claim(commitment: Commitment, actorId: string, now: Date): Commi
     ownerId: actorId,
     proposedOwnerId: actorId,
     acceptedAt: now.toISOString(),
+    statusCategory: "not_started",
+    verificationHold: false,
   });
 }
 
@@ -163,20 +180,89 @@ export function clarify(
   });
 }
 
-export function complete(commitment: Commitment, actorId: string, now: Date): Commitment {
-  return resolveOwned(commitment, actorId, now, "completed");
+export function complete(
+  commitment: Commitment,
+  actorId: string,
+  now: Date,
+  verification?: string,
+): Commitment {
+  if (commitment.state !== "open") {
+    throw new TransitionError("Only an accepted open commitment can be completed.");
+  }
+  if (commitment.ownerId !== actorId) {
+    throw new ConsentError("Only the confirmed owner can resolve this commitment.");
+  }
+  if (verification) {
+    if (!isQualityFlag(verification)) {
+      throw new TransitionError("Unknown verification flag.");
+    }
+    return stamp(commitment, now, {
+      statusCategory: verification,
+      verificationHold: true,
+      resolvedAt: null,
+    });
+  }
+  return stamp(commitment, now, {
+    state: "completed",
+    resolvedAt: now.toISOString(),
+    verificationHold: false,
+  });
 }
 
-export function decline(commitment: Commitment, actorId: string, now: Date): Commitment {
+export function decline(
+  commitment: Commitment,
+  actorId: string,
+  now: Date,
+  reason: string,
+): Commitment {
+  if (!isDeclineReason(reason)) {
+    throw new TransitionError(
+      "Decline requires a reason: wrong owner, competing priorities, requirement changed, or resource unavailable.",
+    );
+  }
+  const category: DeclineReason = reason;
   if (isPendingConsentState(commitment.state) && commitment.proposedOwnerId === actorId) {
     return stamp(commitment, now, {
       state: "declined",
       ownerId: null,
       proposedOwnerId: actorId,
       resolvedAt: now.toISOString(),
+      statusCategory: category,
     });
   }
-  return resolveOwned(commitment, actorId, now, "declined");
+  if (commitment.state !== "open") {
+    throw new TransitionError("Only an accepted open commitment can be resolved this way.");
+  }
+  if (commitment.ownerId !== actorId) {
+    throw new ConsentError("Only the confirmed owner can resolve this commitment.");
+  }
+  return stamp(commitment, now, {
+    state: "declined",
+    resolvedAt: now.toISOString(),
+    statusCategory: category,
+  });
+}
+
+export function flagExecution(
+  commitment: Commitment,
+  actorId: string,
+  now: Date,
+  category: string,
+): Commitment {
+  if (commitment.state !== "open") {
+    throw new TransitionError("Only an open commitment can carry an execution or dependency flag.");
+  }
+  if (commitment.ownerId !== actorId) {
+    throw new ConsentError("Only the confirmed owner can flag a blocker.");
+  }
+  if (!isExecutionFlag(category)) {
+    throw new TransitionError("Unknown execution flag.");
+  }
+  const flag: ExecutionFlag = category;
+  return stamp(commitment, now, {
+    statusCategory: flag,
+    verificationHold: false,
+  });
 }
 
 export function drop(commitment: Commitment, actorId: string, now: Date): Commitment {
@@ -235,22 +321,4 @@ export function markResurfaced(commitment: Commitment, meetingId: string, now: D
 
 function isPendingConsentState(state: CommitmentState): boolean {
   return state === "needs_confirmation" || state === "handoff_pending";
-}
-
-function resolveOwned(
-  commitment: Commitment,
-  actorId: string,
-  now: Date,
-  state: "completed" | "declined",
-): Commitment {
-  if (commitment.state !== "open") {
-    throw new TransitionError("Only an accepted open commitment can be resolved this way.");
-  }
-  if (commitment.ownerId !== actorId) {
-    throw new ConsentError("Only the confirmed owner can resolve this commitment.");
-  }
-  return stamp(commitment, now, {
-    state,
-    resolvedAt: now.toISOString(),
-  });
 }

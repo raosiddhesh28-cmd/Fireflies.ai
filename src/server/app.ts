@@ -9,6 +9,7 @@ import {
   decline,
   dismissToBucket,
   drop,
+  flagExecution,
   keepOpen,
   redirect,
   stopResurfacing,
@@ -61,7 +62,7 @@ export function createApp() {
   });
 
   app.get("/api/meetings/:id/resurface", (req, res) => {
-    const meeting = store.meeting(req.params.id);
+    const meeting = store.meeting(String(req.params.id));
     store.commitments = applyResurfaceVisit(store.commitments, meeting, store.now);
     const items = unresolvedForRecurringMeeting(store.commitments, meeting);
     res.json({ meeting, commitments: items });
@@ -95,7 +96,7 @@ export function createApp() {
         res.status(400).json({ error: "actorId is required." });
         return;
       }
-      const before = store.get(req.params.id);
+      const before = store.get(String(req.params.id));
       const next = fn(actorId);
       store.replace(next);
       res.json({ commitment: next, before: before.state, after: next.state });
@@ -106,40 +107,54 @@ export function createApp() {
   }
 
   app.post("/api/commitments/:id/accept", (req, res) =>
-    act(req, res, (actorId) => accept(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) => accept(store.get(String(req.params.id)), actorId, store.now)),
   );
   app.post("/api/commitments/:id/dismiss", (req, res) =>
-    act(req, res, (actorId) => dismissToBucket(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) => dismissToBucket(store.get(String(req.params.id)), actorId, store.now)),
   );
   app.post("/api/commitments/:id/redirect", (req, res) =>
     act(req, res, (actorId) =>
-      redirect(store.get(req.params.id), actorId, String(req.body.targetUserId ?? ""), store.now),
+      redirect(store.get(String(req.params.id)), actorId, String(req.body.targetUserId ?? ""), store.now),
     ),
   );
   app.post("/api/commitments/:id/claim", (req, res) =>
-    act(req, res, (actorId) => claim(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) => claim(store.get(String(req.params.id)), actorId, store.now)),
   );
   app.post("/api/commitments/:id/complete", (req, res) =>
-    act(req, res, (actorId) => complete(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) =>
+      complete(
+        store.get(String(req.params.id)),
+        actorId,
+        store.now,
+        req.body.verification ? String(req.body.verification) : undefined,
+      ),
+    ),
   );
   app.post("/api/commitments/:id/decline", (req, res) =>
-    act(req, res, (actorId) => decline(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) =>
+      decline(store.get(String(req.params.id)), actorId, store.now, String(req.body.reason ?? "")),
+    ),
+  );
+  app.post("/api/commitments/:id/flag", (req, res) =>
+    act(req, res, (actorId) =>
+      flagExecution(store.get(String(req.params.id)), actorId, store.now, String(req.body.category ?? "")),
+    ),
   );
   app.post("/api/commitments/:id/drop", (req, res) =>
-    act(req, res, (actorId) => drop(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) => drop(store.get(String(req.params.id)), actorId, store.now)),
   );
   app.post("/api/commitments/:id/clarify", (req, res) =>
     act(req, res, (actorId) =>
-      clarify(store.get(req.params.id), actorId, String(req.body.text ?? ""), store.now),
+      clarify(store.get(String(req.params.id)), actorId, String(req.body.text ?? ""), store.now),
     ),
   );
   app.post("/api/commitments/:id/keep-open", (req, res) =>
     act(req, res, (actorId) =>
-      keepOpen(store.get(req.params.id), actorId, String(req.body.meetingId ?? ""), store.now),
+      keepOpen(store.get(String(req.params.id)), actorId, String(req.body.meetingId ?? ""), store.now),
     ),
   );
   app.post("/api/commitments/:id/stop-resurface", (req, res) =>
-    act(req, res, (actorId) => stopResurfacing(store.get(req.params.id), actorId, store.now)),
+    act(req, res, (actorId) => stopResurfacing(store.get(String(req.params.id)), actorId, store.now)),
   );
 
   return app;

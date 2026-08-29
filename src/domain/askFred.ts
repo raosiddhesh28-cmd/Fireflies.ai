@@ -1,4 +1,5 @@
 import { isPendingConsent, isResolved, type Commitment, type Persona } from "./types.js";
+import { statusLabel } from "./statusCategories.js";
 
 export interface AskFredQuery {
   userId: string;
@@ -56,8 +57,23 @@ export function answerAskFred(
   const wantsResolved = /resolved|complete|declined|done/.test(q);
   const wantsMine = /i (have|own|agree)|what did i|my commitment/.test(q);
 
+  const wantsBlocked =
+    /resource unavailable|dependency delayed|dependency missing|blocked/.test(q);
+
   let filtered = scoped;
-  if (wantsResolved && !wantsOpen) {
+  if (wantsBlocked) {
+    filtered = scoped.filter((c) => {
+      if (c.state === "completed" || c.state === "declined" || c.state === "dropped") return false;
+      if (/resource unavailable/.test(q)) return c.statusCategory === "resource_unavailable";
+      if (/dependency delayed/.test(q)) return c.statusCategory === "dependency_delayed";
+      if (/dependency missing/.test(q)) return c.statusCategory === "dependency_missing";
+      return (
+        c.statusCategory === "resource_unavailable" ||
+        c.statusCategory === "dependency_delayed" ||
+        c.statusCategory === "dependency_missing"
+      );
+    });
+  } else if (wantsResolved && !wantsOpen) {
     filtered = scoped.filter((c) => isResolved(c.state));
   } else if (wantsOpen || wantsMine || query.persona === "requester") {
     filtered = scoped.filter((c) => !isResolved(c.state));
@@ -74,8 +90,8 @@ export function answerAskFred(
   const lines = filtered.slice(0, 8).map((c) => serialize(c, query.persona));
   const intro =
     query.persona === "owner"
-      ? introOwner(q, filtered)
-      : introRequester(q, filtered);
+      ? introOwner(q, filtered.length)
+      : introRequester(q, filtered.length);
 
   return {
     text: intro,
@@ -95,10 +111,13 @@ function scopeForPersona(query: AskFredQuery, commitments: Commitment[]): Commit
 
 function serialize(c: Commitment, persona: Persona) {
   const acknowledged = Boolean(c.ownerId) && c.state === "open";
+  const category = statusLabel(c.statusCategory);
   const status =
     persona === "requester"
       ? requesterSafeStatus(c)
-      : c.state;
+      : category
+        ? `${c.state} · ${category}`
+        : c.state;
   return {
     id: c.id,
     text: c.text,
@@ -109,27 +128,35 @@ function serialize(c: Commitment, persona: Persona) {
 }
 
 function requesterSafeStatus(c: Commitment): string {
-  if (c.state === "open") return "acknowledged, still open";
+  const category = statusLabel(c.statusCategory);
+  if (c.state === "open") {
+    return category ? `acknowledged, still open · ${category}` : "acknowledged, still open";
+  }
   if (c.state === "completed") return "completed";
-  if (c.state === "declined") return "declined";
+  if (c.state === "declined") return category ? `declined · ${category}` : "declined";
   if (c.state === "dropped") return "no longer tracked";
-  if (isPendingConsent(c.state)) return "ownership not confirmed";
-  if (c.state === "needs_ownership") return "needs ownership";
+  if (isPendingConsent(c.state)) return category ?? "ownership not confirmed";
+  if (c.state === "needs_ownership") return category ?? "needs ownership";
   return c.state;
 }
 
-function introOwner(q: string, items: ReturnType<typeof serialize>[]): string {
-  if (/agree/.test(q)) {
-    return `You agreed to ${items.length} commitment${items.length === 1 ? "" : "s"} that still need you.`;
+function introOwner(q: string, count: number): string {
+  if (/resource unavailable|dependency delayed|dependency missing|blocked/.test(q)) {
+    return count
+      ? `Found ${count} commitment${count === 1 ? "" : "s"} matching that blocker state.`
+      : "Nothing currently flagged with that blocker.";
   }
-  return `You have ${items.length} commitment${items.length === 1 ? "" : "s"} in your ownership loop.`;
+  if (/agree/.test(q)) {
+    return `You agreed to ${count} commitment${count === 1 ? "" : "s"} that still need you.`;
+  }
+  return `You have ${count} commitment${count === 1 ? "" : "s"} in your ownership loop.`;
 }
 
-function introRequester(q: string, items: ReturnType<typeof serialize>[]): string {
+function introRequester(q: string, count: number): string {
   if (/resolved/.test(q)) {
-    return items.length
+    return count
       ? "Here is the resolution status for what you are waiting on."
       : "Nothing you requested has a resolution recorded yet.";
   }
-  return `You are waiting on ${items.length} item${items.length === 1 ? "" : "s"}. Ownership is shown only as confirmed or not — not as a chase list.`;
+  return `You are waiting on ${count} item${count === 1 ? "" : "s"}. Ownership is shown only as confirmed or not — not as a chase list.`;
 }

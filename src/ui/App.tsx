@@ -7,6 +7,14 @@ import {
   type Meeting,
   type User,
 } from "./api";
+import {
+  DECLINE_REASONS,
+  DEPENDENCY_FLAGS,
+  QUALITY_FLAGS,
+  STATUS_META,
+  isResurfacePriority,
+  type StatusCategory,
+} from "../domain/statusCategories";
 
 type Tab = "home" | "bucket" | "meeting" | "askfred" | "manager";
 
@@ -23,6 +31,8 @@ export function App() {
   const [redirectFor, setRedirectFor] = useState<Commitment | null>(null);
   const [clarifyFor, setClarifyFor] = useState<Commitment | null>(null);
   const [clarifyText, setClarifyText] = useState("");
+  const [declineFor, setDeclineFor] = useState<Commitment | null>(null);
+  const [completeFor, setCompleteFor] = useState<Commitment | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resurface, setResurface] = useState<Commitment[]>([]);
@@ -80,6 +90,8 @@ export function App() {
       setToast(successCopy(action, result.commitment));
       setRedirectFor(null);
       setClarifyFor(null);
+      setDeclineFor(null);
+      setCompleteFor(null);
       await refresh();
       if (tab === "meeting" && nextMeeting) {
         const r = await api.resurface(nextMeeting.id);
@@ -156,7 +168,7 @@ export function App() {
           nameOf={nameOf}
           onOpen={setActive}
           onAccept={(c) => act(c.id, "accept")}
-          onDecline={(c) => act(c.id, "decline")}
+          onDecline={setDeclineFor}
           onRedirect={setRedirectFor}
         />
       )}
@@ -177,8 +189,8 @@ export function App() {
           items={resurface}
           nameOf={nameOf}
           userId={userId}
-          onComplete={(c) => act(c.id, "complete")}
-          onDecline={(c) => act(c.id, "decline")}
+          onComplete={setCompleteFor}
+          onDecline={setDeclineFor}
           onKeepOpen={(c) => act(c.id, "keep-open", { meetingId: nextMeeting.id })}
           onStop={(c) => act(c.id, "stop-resurface")}
         />
@@ -204,12 +216,13 @@ export function App() {
           userId={userId}
           onClose={() => setActive(null)}
           onAccept={() => act(active.id, "accept")}
-          onDecline={() => act(active.id, "decline")}
-          onComplete={() => act(active.id, "complete")}
+          onDecline={() => setDeclineFor(active)}
+          onComplete={() => setCompleteFor(active)}
           onDismiss={() => act(active.id, "dismiss")}
           onDrop={() => act(active.id, "drop")}
           onClaim={() => act(active.id, "claim")}
           onRedirect={() => setRedirectFor(active)}
+          onFlag={(category) => act(active.id, "flag", { category })}
           onClarify={() => {
             setClarifyText(active.text);
             setClarifyFor(active);
@@ -228,6 +241,41 @@ export function App() {
                   Propose {u.name}
                 </button>
               ))}
+          </div>
+        </Modal>
+      )}
+
+      {declineFor && (
+        <Modal title="Decline — choose a legitimate reason" onClose={() => setDeclineFor(null)}>
+          <p>Declining is an honest close. Categorize it so the record stays useful, not punitive.</p>
+          <div className="stack">
+            {DECLINE_REASONS.map((reason) => (
+              <button
+                key={reason}
+                className="secondary"
+                onClick={() => act(declineFor.id, "decline", { reason })}
+              >
+                {STATUS_META[reason].label}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {completeFor && (
+        <Modal title="Verify before archiving" onClose={() => setCompleteFor(null)}>
+          <p>If this is only partly done, failed quality, or needs rework, flag it. It stays open.</p>
+          <div className="stack">
+            {QUALITY_FLAGS.map((flag) => (
+              <button
+                key={flag}
+                className="secondary"
+                onClick={() => act(completeFor.id, "complete", { verification: flag })}
+              >
+                {STATUS_META[flag].label} — keep open
+              </button>
+            ))}
+            <button onClick={() => act(completeFor.id, "complete")}>Archive as complete</button>
           </div>
         </Modal>
       )}
@@ -260,7 +308,7 @@ function Home(props: {
         {props.proposed.length === 0 && <Empty text="No proposals waiting on you." />}
         {props.proposed.map((c) => (
           <article key={c.id} className="card tap">
-            <StatusChip state={c.state} />
+            <StatusChip state={c.state} category={c.statusCategory} />
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <p className="meta">Requested in meeting context · {c.redirectedBy ? `Proposed after redirect` : "Proposed from extraction"}</p>
@@ -285,7 +333,7 @@ function Home(props: {
         {props.owned.map((c) => (
           <button key={c.id} className="row" onClick={() => props.onOpen(c)}>
             <span>{c.text}</span>
-            <StatusChip state={c.state} />
+            <StatusChip state={c.state} category={c.statusCategory} />
           </button>
         ))}
         <h2>You’re waiting on</h2>
@@ -298,7 +346,7 @@ function Home(props: {
           .map((c) => (
             <button key={c.id} className="row" onClick={() => props.onOpen(c)}>
               <span>{c.text}</span>
-              <StatusChip state={c.state} audience="requester" />
+              <StatusChip state={c.state} category={c.statusCategory} audience="requester" />
             </button>
           ))}
       </section>
@@ -317,10 +365,11 @@ function LooseEnds(props: {
     <main className="layout">
       <section>
         <h2>Loose-ends bucket</h2>
-        <p className="lede">Shared awareness, not a failure list. These items have no confirmed owner.</p>
+        <p className="lede">Shared awareness, not a failure list. Unowned extractions start as Not accepted.</p>
         {props.items.length === 0 && <Empty text="The bucket is clear." />}
         {props.items.map((c) => (
           <article key={c.id} className="card">
+            <StatusChip state={c.state} category={c.statusCategory} />
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <div className="actions">
@@ -354,11 +403,13 @@ function MeetingSurface(props: {
       <section>
         <p className="eyebrow">{new Date(props.meeting.startsAt).toUTCString()}</p>
         <h2>{props.meeting.title}</h2>
-        <p className="lede">Unresolved commitments from this recurring group, shown neutrally. Not a scoreboard.</p>
+        <p className="lede">
+          Unresolved items for this recurring group. Not started, deadline missed, and communication failure are listed first.
+        </p>
         {props.items.length === 0 && <Empty text="Nothing from this series needs to come up today." />}
         {props.items.map((c) => (
-          <article key={c.id} className="card resurface">
-            <StatusChip state="open" />
+          <article key={c.id} className={`card resurface${isResurfacePriority(c.statusCategory) ? " priority" : ""}`}>
+            <StatusChip state={c.state} category={c.statusCategory} />
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <p className="meta">
@@ -398,7 +449,7 @@ function AskFred(props: {
     <main className="layout">
       <section className="card">
         <h2>AskFred</h2>
-        <p className="lede">Pull-based. Owners ask what they own. Requesters ask what they’re waiting on. No reminder blast.</p>
+        <p className="lede">Pull-based. Ask what you own, what you are waiting on, or what is blocked by a delayed dependency or unavailable resource.</p>
         <textarea value={props.query} onChange={(e) => props.setQuery(e.target.value)} />
         <button onClick={props.onAsk}>Ask</button>
         {props.answer && (
@@ -478,13 +529,15 @@ function Detail(props: {
   onClaim: () => void;
   onRedirect: () => void;
   onClarify: () => void;
+  onFlag: (category: string) => void;
 }) {
   const c = props.item;
   const proposedToMe = c.proposedOwnerId === props.userId;
   const isOwner = c.ownerId === props.userId;
   return (
     <Modal title="Commitment" onClose={props.onClose}>
-      <StatusChip state={c.state} />
+      <StatusChip state={c.state} category={c.statusCategory} />
+      {c.verificationHold && <p className="meta">Held at quality gate — not archived.</p>}
       <h3>{c.text}</h3>
       <blockquote>“{c.transcriptLine}”</blockquote>
       <p className="meta">Requester {props.nameOf(c.requesterId)} · proposed {props.nameOf(c.proposedOwnerId)}</p>
@@ -532,6 +585,28 @@ function Detail(props: {
           </>
         )}
       </div>
+      {isOwner && c.state === "open" && (
+        <div className="flag-block">
+          <p className="meta">Dependencies (stay open — not a failed commitment)</p>
+          <div className="actions">
+            {DEPENDENCY_FLAGS.map((flag) => (
+              <button key={flag} className="ghost" onClick={() => props.onFlag(flag)}>
+                {STATUS_META[flag].label}
+              </button>
+            ))}
+          </div>
+          <p className="meta">Execution signals</p>
+          <div className="actions">
+            {(["not_started", "competing_priorities", "deadline_missed", "communication_failure", "resource_unavailable"] as const).map(
+              (flag) => (
+                <button key={flag} className="ghost" onClick={() => props.onFlag(flag)}>
+                  {STATUS_META[flag].label}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -552,8 +627,21 @@ function Modal(props: { title: string; onClose: () => void; children: ReactNode 
   );
 }
 
-function StatusChip({ state, audience = "owner" }: { state: string; audience?: "owner" | "requester" }) {
-  return <span className={`chip ${state}`}>{label(state, audience)}</span>;
+function StatusChip({
+  state,
+  audience = "owner",
+  category,
+}: {
+  state: string;
+  audience?: "owner" | "requester";
+  category?: StatusCategory | null;
+}) {
+  return (
+    <span className={`chip ${state} ${category ?? ""}`}>
+      {label(state, audience)}
+      {category ? ` · ${STATUS_META[category].label}` : ""}
+    </span>
+  );
 }
 
 function Empty({ text }: { text: string }) {
@@ -589,7 +677,12 @@ function successCopy(action: string, c: Commitment): string {
   if (action === "accept") return "You accepted ownership. It is now yours to resolve.";
   if (action === "redirect") return "Proposed to someone else. They still have to accept — it is not assigned.";
   if (action === "decline") return "Recorded as declined. That is a legitimate resolution, not a failure.";
-  if (action === "complete") return "Marked complete.";
+  if (action === "complete") {
+    return c.verificationHold
+      ? `Held at quality gate (${STATUS_META[c.statusCategory].label}). Not archived.`
+      : "Marked complete.";
+  }
+  if (action === "flag") return `Flagged ${STATUS_META[c.statusCategory].label}. Commitment stays open.`;
   if (action === "claim") return "You claimed this from the loose-ends bucket.";
   if (action === "dismiss") return "Moved to the loose-ends bucket. Still visible, still unowned.";
   if (action === "drop") return "Dropped. Tracked as no longer relevant / not a commitment.";
@@ -599,5 +692,5 @@ function successCopy(action: string, c: Commitment): string {
 }
 
 function requesterMode(query: string) {
-  return /waiting|resolved|status|has this/.test(query.toLowerCase());
+  return /waiting|resolved|status|has this|blocked|dependency|resource/.test(query.toLowerCase());
 }
