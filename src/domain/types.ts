@@ -1,3 +1,5 @@
+import type { StatusCategory } from "./statusCategories.js";
+
 export const PROPOSAL_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 export const MAX_RESURFACES = 3;
 export const RESOLUTION_WINDOW_DAYS = 14;
@@ -58,6 +60,8 @@ export interface Commitment {
   suppressMeetingId: string | null;
   lastResurfacedMeetingId: string | null;
   clarification: string | null;
+  statusCategory: StatusCategory;
+  verificationHold: boolean;
 }
 
 export interface ManagerRollup {

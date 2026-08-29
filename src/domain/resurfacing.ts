@@ -1,13 +1,16 @@
 import type { Commitment, Meeting } from "./types.js";
 import { MAX_RESURFACES } from "./types.js";
 import { markResurfaced } from "./stateMachine.js";
+import { isResurfacePriority } from "./statusCategories.js";
 
 export function unresolvedForRecurringMeeting(
   commitments: Commitment[],
   meeting: Meeting,
 ): Commitment[] {
   if (!meeting.seriesId || meeting.cancelled) return [];
-  return commitments.filter((c) => eligible(c, meeting) && c.resurfaceCount < MAX_RESURFACES);
+  return commitments
+    .filter((c) => eligible(c, meeting) && c.resurfaceCount < MAX_RESURFACES)
+    .sort((a, b) => Number(isResurfacePriority(b.statusCategory)) - Number(isResurfacePriority(a.statusCategory)));
 }
 
 export function applyResurfaceVisit(

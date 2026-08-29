@@ -117,6 +117,15 @@ export const EXTRACTIONS: ExtractionRecord[] = [
     requesterId: "alex",
     extractedAt: "2026-08-21T19:30:00.000Z",
   },
+  {
+    id: "ext-9",
+    meetingId: "mtg-sync-prev",
+    text: "Wire the billing webhook once finance publishes the event contract.",
+    transcriptLine: "Alex: I’ll wire the billing webhook after finance publishes the contract.",
+    suggestedOwnerId: "alex",
+    requesterId: "blair",
+    extractedAt: "2026-08-22T16:58:00.000Z",
+  },
 ];
 
 export function seedCommitments(now: Date): Commitment[] {
@@ -136,6 +145,7 @@ export function seedCommitments(now: Date): Commitment[] {
         proposedOwnerId: "alex",
         acceptedAt: "2026-08-22T17:10:00.000Z",
         resurfaceCount: 1,
+        statusCategory: "not_started",
       };
     }
     if (c.id === "ext-6") {
@@ -164,6 +174,17 @@ export function seedCommitments(now: Date): Commitment[] {
         proposedOwnerId: "casey",
         acceptedAt: "2026-08-21T19:40:00.000Z",
         resolvedAt: "2026-08-21T19:44:00.000Z",
+        statusCategory: "wrong_owner",
+      };
+    }
+    if (c.id === "ext-9") {
+      return {
+        ...c,
+        state: "open",
+        ownerId: "alex",
+        proposedOwnerId: "alex",
+        acceptedAt: "2026-08-22T18:00:00.000Z",
+        statusCategory: "dependency_delayed",
       };
     }
     return c;
