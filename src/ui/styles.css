@@ -24,10 +24,24 @@ button {
   border: 0;
   border-radius: 8px;
   padding: 0.5rem 0.85rem;
+  font-weight: 600;
   cursor: pointer;
 }
-button.secondary { background: #2a3148; }
-button.ghost { background: transparent; border: 1px solid var(--line); }
+button.secondary {
+  background: #2a3148;
+  border: 1px solid #2a3148;
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  font-weight: 600;
+}
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  font-weight: 600;
+}
 select, textarea {
   background: #0f1622;
   color: var(--text);
@@ -117,6 +131,8 @@ blockquote {
 .bar { flex: 1; text-align: center; color: var(--muted); font-size: 0.75rem; }
 .bar div { background: var(--accent); border-radius: 8px 8px 0 0; margin: 0 auto; width: 42px; }
 .persona { display: grid; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.ask-row { display: grid; gap: 0.6rem; }
+.ask-row textarea { margin: 0; }
 @media (max-width: 720px) {
   .metrics { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; align-items: flex-start; }

@@ -309,8 +309,10 @@ export function markResurfaced(commitment: Commitment, meetingId: string, now: D
   if (commitment.lastResurfacedMeetingId === meetingId) return commitment;
   if (commitment.resurfaceCount >= MAX_RESURFACES) {
     return stamp(commitment, now, {
-      state: "dropped",
-      resolvedAt: now.toISOString(),
+      state: "needs_ownership",
+      ownerId: null,
+      proposedOwnerId: null,
+      resolvedAt: null,
     });
   }
   return stamp(commitment, now, {
