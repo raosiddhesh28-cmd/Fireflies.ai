@@ -156,7 +156,28 @@ describe("resurfacing", () => {
       },
     ];
     items = applyResurfaceVisit(items, nextMeeting, now);
-    expect(items[0].state).toBe("dropped");
+    expect(items[0].state).toBe("needs_ownership");
+    expect(items[0].ownerId).toBeNull();
+    expect(items[0].proposedOwnerId).toBeNull();
+    expect(items[0].resolvedAt).toBeNull();
+  });
+
+  it("routes a commitment at the resurface cap to needs_ownership, not dropped", () => {
+    const nextMeeting = MEETINGS.find((m) => m.id === "mtg-sync-next")!;
+    let items: Commitment[] = [
+      {
+        ...accept(proposed(), "alex", now),
+        meetingId: "mtg-sync-prev",
+        seriesId: "series-product-sync",
+        resurfaceCount: 2,
+      },
+    ];
+    items = applyResurfaceVisit(items, nextMeeting, now);
+    expect(items[0].state).toBe("needs_ownership");
+    expect(items[0].state).not.toBe("dropped");
+    expect(items[0].ownerId).toBeNull();
+    expect(items[0].proposedOwnerId).toBeNull();
+    expect(items[0].resolvedAt).toBeNull();
   });
 });
 
