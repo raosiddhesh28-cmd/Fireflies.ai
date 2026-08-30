@@ -78,7 +78,12 @@ async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
     );
   }
   if (!res.ok || !data) {
-    throw new Error(data?.error || `Request failed with status ${res.status}.`);
+    throw new Error(
+      data?.error ||
+        (raw
+          ? `Request failed with status ${res.status}.`
+          : `API returned an empty ${res.status} response. The API process may be down — check the server terminal.`),
+    );
   }
   return data as T;
 }
