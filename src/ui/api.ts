@@ -86,6 +86,11 @@ export const api = {
       body: JSON.stringify({ userId, persona, query }),
     }),
   rollup: () => json<ManagerRollup>("/api/manager/rollup"),
+  uploadMeeting: (body: { title: string; transcriptText: string; seriesId: string | null }) =>
+    json<{ meeting: Meeting; summary: string; commitments: Commitment[] }>("/api/meetings/upload", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   act: (id: string, action: string, body: Record<string, string>) =>
     json<{ commitment: Commitment }>(`/api/commitments/${id}/${action}`, {
       method: "POST",
