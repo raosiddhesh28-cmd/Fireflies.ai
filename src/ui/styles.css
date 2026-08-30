@@ -27,9 +27,9 @@ button.secondary {
   font-weight: 600;
 }
 button.ghost {
-  background: transparent;
+  background: #2a3148;
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid #2a3148;
   border-radius: 8px;
   padding: 0.5rem 0.85rem;
   font-weight: 600;
