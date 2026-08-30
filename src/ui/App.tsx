@@ -37,11 +37,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [resurface, setResurface] = useState<Commitment[]>([]);
   const [askQuery, setAskQuery] = useState("What remains open?");
+  const [askPersona, setAskPersona] = useState<"owner" | "requester">("owner");
   const [askAnswer, setAskAnswer] = useState<AskFredAnswer | null>(null);
   const [rollup, setRollup] = useState<ManagerRollup | null>(null);
 
-  const user = users.find((u) => u.id === userId);
-  const persona = user?.role === "manager" ? "manager" : tab === "manager" ? "manager" : "owner";
   const nextMeeting = meetings.find((m) => m.id === "mtg-sync-next");
 
   const refresh = useCallback(async () => {
@@ -104,8 +103,7 @@ export function App() {
   }
 
   async function ask() {
-    const personaForAsk = user?.role === "manager" ? "manager" : requesterMode(askQuery) ? "requester" : "owner";
-    const answer = await api.askFred(userId, personaForAsk, askQuery);
+    const answer = await api.askFred(userId, askPersona, askQuery);
     setAskAnswer(answer);
   }
 
@@ -202,7 +200,8 @@ export function App() {
           setQuery={setAskQuery}
           answer={askAnswer}
           onAsk={ask}
-          persona={persona}
+          askPersona={askPersona}
+          setAskPersona={setAskPersona}
         />
       )}
 
@@ -275,7 +274,7 @@ export function App() {
                 {STATUS_META[flag].label} — keep open
               </button>
             ))}
-            <button onClick={() => act(completeFor.id, "complete")}>Archive as complete</button>
+            <button className="secondary" onClick={() => act(completeFor.id, "complete")}>Archive as complete</button>
           </div>
         </Modal>
       )}
@@ -313,7 +312,7 @@ function Home(props: {
             <blockquote>“{c.transcriptLine}”</blockquote>
             <p className="meta">Requested in meeting context · {c.redirectedBy ? `Proposed after redirect` : "Proposed from extraction"}</p>
             <div className="actions">
-              <button onClick={() => props.onAccept(c)}>Accept</button>
+              <button className="secondary" onClick={() => props.onAccept(c)}>Accept</button>
               <button className="secondary" onClick={() => props.onRedirect(c)}>
                 Redirect
               </button>
@@ -373,7 +372,7 @@ function LooseEnds(props: {
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <div className="actions">
-              <button onClick={() => props.onClaim(c)}>Claim it</button>
+              <button className="secondary" onClick={() => props.onClaim(c)}>Claim it</button>
               <button className="secondary" onClick={() => props.onRedirect(c)}>
                 Propose someone
               </button>
@@ -413,11 +412,11 @@ function MeetingSurface(props: {
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <p className="meta">
-              Owner {props.nameOf(c.ownerId)} · resurfaced {c.resurfaceCount} of 3
+              Owner {props.nameOf(c.ownerId)} · resurfaced {c.resurfaceCount} of 2
             </p>
             {c.ownerId === props.userId ? (
               <div className="actions">
-                <button onClick={() => props.onComplete(c)}>Complete</button>
+                <button className="secondary" onClick={() => props.onComplete(c)}>Complete</button>
                 <button className="ghost" onClick={() => props.onDecline(c)}>
                   Decline
                 </button>
@@ -443,14 +442,27 @@ function AskFred(props: {
   setQuery: (v: string) => string | void;
   answer: AskFredAnswer | null;
   onAsk: () => void;
-  persona: string;
+  askPersona: "owner" | "requester";
+  setAskPersona: (v: "owner" | "requester") => void;
 }) {
   return (
     <main className="layout">
       <section className="card">
         <h2>AskFred</h2>
         <p className="lede">Pull-based. Ask what you own, what you are waiting on, or what is blocked by a delayed dependency or unavailable resource.</p>
-        <textarea value={props.query} onChange={(e) => props.setQuery(e.target.value)} />
+        <div className="ask-row">
+          <label className="persona">
+            Persona
+            <select
+              value={props.askPersona}
+              onChange={(e) => props.setAskPersona(e.target.value as "owner" | "requester")}
+            >
+              <option value="owner">Owner</option>
+              <option value="requester">Requester</option>
+            </select>
+          </label>
+          <textarea value={props.query} onChange={(e) => props.setQuery(e.target.value)} />
+        </div>
         <button onClick={props.onAsk}>Ask</button>
         {props.answer && (
           <div className="answer">
@@ -544,7 +556,7 @@ function Detail(props: {
       <div className="actions">
         {proposedToMe && (c.state === "needs_confirmation" || c.state === "handoff_pending") && (
           <>
-            <button onClick={props.onAccept}>Accept</button>
+            <button className="secondary" onClick={props.onAccept}>Accept</button>
             <button className="secondary" onClick={props.onRedirect}>
               Redirect
             </button>
@@ -564,7 +576,7 @@ function Detail(props: {
         )}
         {isOwner && c.state === "open" && (
           <>
-            <button onClick={props.onComplete}>Complete</button>
+            <button className="secondary" onClick={props.onComplete}>Complete</button>
             <button className="ghost" onClick={props.onDecline}>
               Decline
             </button>
@@ -578,7 +590,7 @@ function Detail(props: {
         )}
         {c.state === "needs_ownership" && (
           <>
-            <button onClick={props.onClaim}>Claim it</button>
+            <button className="secondary" onClick={props.onClaim}>Claim it</button>
             <button className="secondary" onClick={props.onRedirect}>
               Propose someone
             </button>
@@ -689,8 +701,4 @@ function successCopy(action: string, c: Commitment): string {
   if (action === "keep-open") return "Kept open. It will not resurface in this meeting again.";
   if (action === "stop-resurface") return "Stopped resurfacing. Recorded as dropped, not as a performance miss.";
   return `Updated · ${c.state}`;
-}
-
-function requesterMode(query: string) {
-  return /waiting|resolved|status|has this|blocked|dependency|resource/.test(query.toLowerCase());
 }
