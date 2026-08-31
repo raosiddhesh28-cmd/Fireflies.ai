@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import { store } from "../domain/store.js";
 import {
@@ -9,6 +9,7 @@ import {
   decline,
   dismissToBucket,
   drop,
+  fromExtraction,
   keepOpen,
   redirect,
   stopResurfacing,
@@ -18,12 +19,13 @@ import {
 import { applyResurfaceVisit, unresolvedForRecurringMeeting } from "../domain/resurfacing.js";
 import { answerAskFred } from "../domain/askFred.js";
 import { assertPrivacyLock, computeManagerRollup } from "../domain/privacyLock.js";
-import type { Persona } from "../domain/types.js";
+import { extractFromTranscript } from "../domain/extraction.js";
+import type { ExtractionRecord, Meeting, Persona } from "../domain/types.js";
 
 export function createApp() {
   const app = express();
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: "2mb" }));
 
   app.get("/api/session", (_req, res) => {
     store.applyExpirations();
@@ -58,6 +60,76 @@ export function createApp() {
       items = items.filter((c) => c.requesterId === userId);
     }
     res.json({ commitments: items });
+  });
+
+  app.post("/api/meetings/upload", async (req, res) => {
+    try {
+      const title = String(req.body?.title ?? "").trim();
+      const transcriptText = String(req.body?.transcriptText ?? "").trim();
+      const seriesId =
+        req.body?.seriesId === null || req.body?.seriesId === undefined || req.body?.seriesId === ""
+          ? null
+          : String(req.body.seriesId);
+
+      if (!title || !transcriptText) {
+        res.status(400).json({ error: "title and transcriptText are required." });
+        return;
+      }
+
+      let extracted: Awaited<ReturnType<typeof extractFromTranscript>>;
+      try {
+        extracted = await extractFromTranscript({
+          transcriptText,
+          meetingTitle: title,
+          knownUsers: store.users,
+        });
+      } catch (err) {
+        console.error("[upload] extraction failed", {
+          name: err instanceof Error ? err.name : "unknown",
+          message: err instanceof Error ? err.message : String(err),
+        });
+        res.status(502).json({
+          error: (err as Error).message || "Commitment extraction failed.",
+        });
+        return;
+      }
+
+      const meeting: Meeting = {
+        id: `mtg-${crypto.randomUUID()}`,
+        title,
+        seriesId,
+        startsAt: store.now.toISOString(),
+        cancelled: false,
+      };
+      store.addMeeting(meeting);
+
+      const now = store.now;
+      const commitments = extracted.extractions.map((row, index) => {
+        const record: ExtractionRecord = {
+          id: `ext-${meeting.id}-${index}`,
+          meetingId: meeting.id,
+          text: row.text,
+          transcriptLine: row.transcriptLine,
+          suggestedOwnerId: row.suggestedOwnerId,
+          requesterId: row.requesterId ?? "",
+          extractedAt: now.toISOString(),
+        };
+        return fromExtraction({ ...record, seriesId: meeting.seriesId }, now);
+      });
+      store.commitments = [...store.commitments, ...commitments];
+      res.json({ meeting, summary: extracted.summary, commitments });
+    } catch (err) {
+      console.error("[upload] unhandled error", {
+        name: err instanceof Error ? err.name : "unknown",
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: err instanceof Error ? err.message : "Failed to process meeting.",
+        });
+      }
+    }
   });
 
   app.get("/api/meetings/:id/resurface", (req, res) => {
@@ -141,6 +213,19 @@ export function createApp() {
   app.post("/api/commitments/:id/stop-resurface", (req, res) =>
     act(req, res, (actorId) => stopResurfacing(store.get(req.params.id), actorId, store.now)),
   );
+
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("[api] unhandled", {
+      name: err instanceof Error ? err.name : "unknown",
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Internal server error",
+      });
+    }
+  });
 
   return app;
 }

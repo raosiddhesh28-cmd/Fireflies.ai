@@ -1,5 +1,5 @@
 export const PROPOSAL_TTL_MS = 3 * 24 * 60 * 60 * 1000;
-export const MAX_RESURFACES = 3;
+export const MAX_RESURFACES = 2;
 export const RESOLUTION_WINDOW_DAYS = 14;
 export const BASELINE_RESOLUTION_RATE = 0.28;
 export const TARGET_RESOLUTION_RATE = 0.45;

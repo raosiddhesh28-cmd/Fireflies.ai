@@ -30,6 +30,6 @@ Demo users: Alex (proposed owner), Blair (requester), Casey (redirect target), D
 
 `needs_ownership` → `open` (claim) · `handoff_pending` (propose)
 
-`open` → `completed` · `declined` · `dropped` · resurface overlay (max 3, same recurring series)
+`open` → `completed` · `declined` · `dropped` · resurface overlay (max 2, then Loose-Ends)
 
 Redirect never sets `ownerId`. The target must accept.
