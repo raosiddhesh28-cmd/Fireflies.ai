@@ -8,7 +8,7 @@ import {
   type User,
 } from "./api";
 
-type Tab = "home" | "bucket" | "meeting" | "askfred" | "manager";
+type Tab = "home" | "bucket" | "meeting" | "upload" | "askfred" | "manager";
 
 export function App() {
   const [users, setUsers] = useState<User[]>([]);
@@ -128,6 +128,7 @@ export function App() {
             ["home", "Home"],
             ["bucket", "Loose ends"],
             ["meeting", "Next meeting"],
+            ["upload", "Upload"],
             ["askfred", "AskFred"],
             ["manager", "Team rollup"],
           ] as const
@@ -179,6 +180,16 @@ export function App() {
           onDecline={(c) => act(c.id, "decline")}
           onKeepOpen={(c) => act(c.id, "keep-open", { meetingId: nextMeeting.id })}
           onStop={(c) => act(c.id, "stop-resurface")}
+        />
+      )}
+
+      {tab === "upload" && (
+        <Upload
+          onProcessed={async () => {
+            const s = await api.session();
+            setMeetings(s.meetings);
+            await refresh();
+          }}
         />
       )}
 
@@ -238,6 +249,112 @@ export function App() {
         </Modal>
       )}
     </div>
+  );
+}
+
+const TRANSCRIPT_TYPES = [".txt", ".vtt", ".srt"];
+const MEDIA_TYPES = /\.(mp4|mp3|wav|m4a|webm|mov|mpeg|aac|ogg|flac|m4v|avi)$/i;
+
+function Upload(props: { onProcessed: () => Promise<void> }) {
+  const [title, setTitle] = useState("");
+  const [transcriptText, setTranscriptText] = useState("");
+  const [seriesId, setSeriesId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [created, setCreated] = useState<Commitment[]>([]);
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setFileNote(null);
+    const name = file.name.toLowerCase();
+    if (MEDIA_TYPES.test(name) || file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+      setFileNote(
+        "Video/audio files aren't transcribed automatically yet — please paste or upload the transcript text instead.",
+      );
+      return;
+    }
+    const ext = name.slice(name.lastIndexOf("."));
+    if (ext && !TRANSCRIPT_TYPES.includes(ext) && file.type !== "text/plain") {
+      setFileNote(
+        "Video/audio files aren't transcribed automatically yet — please paste or upload the transcript text instead.",
+      );
+      return;
+    }
+    setTranscriptText(await file.text());
+  }
+
+  async function processMeeting() {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await api.uploadMeeting({
+        title,
+        transcriptText,
+        seriesId: seriesId.trim() ? seriesId.trim() : null,
+      });
+      setSummary(result.summary);
+      setCreated(result.commitments);
+      await props.onProcessed();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="layout">
+      <section className="card">
+        <h2>Upload a transcript</h2>
+        <p className="lede">Paste or upload transcript text. Extraction uses the existing ownership loop — nothing is assigned until someone opts in.</p>
+        <label className="persona">
+          Meeting title
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="persona">
+          Recurring series id (optional)
+          <input value={seriesId} onChange={(e) => setSeriesId(e.target.value)} />
+        </label>
+        <textarea
+          value={transcriptText}
+          onChange={(e) => setTranscriptText(e.target.value)}
+          placeholder="Paste transcript text…"
+          rows={12}
+        />
+        <label className="persona">
+          Transcript file
+          <input
+            type="file"
+            accept=".txt,.vtt,.srt,text/plain"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+        </label>
+        {fileNote && <p className="error">{fileNote}</p>}
+        <button disabled={busy || !title.trim() || !transcriptText.trim()} onClick={processMeeting}>
+          {busy ? "Processing…" : "Process meeting"}
+        </button>
+        {error && <p className="error">{error}</p>}
+      </section>
+      {summary && (
+        <section>
+          <h2>Summary</h2>
+          <article className="card">
+            <p>{summary}</p>
+          </article>
+          <h2>Extracted commitments</h2>
+          {created.length === 0 && <Empty text="No forward-looking commitments were found." />}
+          {created.map((c) => (
+            <article key={c.id} className="card">
+              <StatusChip state={c.state} />
+              <h3>{c.text}</h3>
+              <blockquote>“{c.transcriptLine}”</blockquote>
+            </article>
+          ))}
+        </section>
+      )}
+    </main>
   );
 }
 
