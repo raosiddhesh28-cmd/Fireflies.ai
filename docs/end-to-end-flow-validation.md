@@ -1,47 +1,70 @@
-# End-to-End Flow Validation
+# End-to-End Flow Validation (implemented product)
 
-**Product:** Fireflies.ai commitment ownership, follow-through, and honest resolution  
+**Product:** Fireflies.ai in-product commitment ownership, follow-through, and honest resolution  
 **Review stance:** Senior PM / Principal UX / UX QA  
-**Verdict:** **FLOW INCOMPLETE — do not approve**
+**Date:** 2026-08-31  
+**Verdict:** **FLOW INCOMPLETE — do not approve for production**
 
 **Source of truth used in this review**
 
-1. Product principles, personas, and five core capabilities in the review brief.
-2. The existing screen catalog from the prior prototype memo (`SCREEN_3`, `6`, `8`, `9`, `13`, `16`, `17`, `33`–`37`).
+1. Product principles, personas, and five core capabilities in the original review brief (opt-in ownership, Loose-Ends, Decline-as-outcome, resurfacing with decay, pull-based AskFred, no surveillance).
+2. The **running product** restored from the archived agent lineage (`src/ui/App.tsx`, `src/domain/stateMachine.ts`, AskFred, resurfacing, privacy lock, upload extraction, demo seed).
+3. The prior catalog review (`docs/end-to-end-flow-validation-catalog.md`, completeness **3.5/10**) as a baseline of what was missing on paper.
 
-**What was not available**
+**What this unarchive review is not**
 
-No wireframes, prototype link, screenshots, or step-level specs for screens `1–2`, `4–5`, `7`, `10–12`, `14–15`, `18–32`, or any AskFred Owner surface. Numbering implies a ~37-frame file; only **12 frames** are described. Undescribed frames are treated as **undocumented**, not as proven complete.
-
-This review does **not** invent a new product. It maps what is defined, then closes only the gaps that leave a journey without a next step or an honest end state.
+This is not a redesign. It maps the **connected system that now exists**, then flags remaining journeys with no next step or no honest end state. SCREEN_* numbers from the old prototype memo are mapped to product surfaces; undescribed Figma frames are no longer treated as the live source of truth.
 
 ---
 
 # 1. Overall Flow Health Assessment
 
-| Metric | Value |
-|---|---|
-| **Overall Flow Completeness Score** | **3.5 / 10** |
-| Complete flows (entry → intentional end, both personas, no stranded state) | **2** (Owner mark complete; Owner decline-from-active, local only) |
-| Missing flows | **11** |
-| Dead ends | **9** |
-| Missing states | **7** |
-| Orphan / undocumented screens | **~25 undescribed frames + 1 dual-purpose collision (`SCREEN_36`)** |
-| Required screen additions (true new surfaces) | **3** |
-| Required existing-screen or modal modifications | **9** |
+| Metric | Catalog (2026-08-29) | Implemented (this review) |
+|---|---|---|
+| **Overall Flow Completeness Score** | **3.5 / 10** | **6.8 / 10** |
+| Complete flows (entry → intentional end, both personas where required) | 2 | **9** |
+| Missing flows | 11 | **7** |
+| Dead ends | 9 | **5** |
+| Missing states | 7 | **2** (History / undo window; blocked-or-partial note) |
+| Orphan screens | ~25 undescribed frames | **1** (Upload result cards have no actions) |
+| Required screen additions | 3 | **2** (Owner/Requester History; post-upload Acceptance Tap handoff) |
+| Required existing-screen or modal modifications | 9 | **6** |
 
-**Why 3.5, not the prior 7.5:** Happy-path Owner accept/complete/decline is sketched. Ownership handoff, no-response, requester visibility, resurfacing decay, AskFred Owner + boundaries, and AI-error recovery are not closed systems. A screen existing is not a flow.
+**Why 6.8, not 9:** The original critical holes — **Handoff pending**, **dismiss/timeout → Loose-Ends**, **Decline and Not-a-commitment on the proposal**, **recipient Acceptance Tap**, **resurface decay (max 2 → bucket)**, **AskFred Owner vs Requester split**, **no requester Reassign** — are implemented in the state machine and on the corresponding surfaces. Completeness is no longer blocked by an unmodeled ownership send.
 
-**Complete flows (narrow definition)**
+**Why not approve:** Requester **cannot see terminal outcomes on Home** (completed / declined / dropped are filtered out of “You’re waiting on”). Owner has **no History**. **Undo does not exist**. Keep Open / stop-resurface live **only** on Next meeting, not on the owned-item detail. Hitting the resurface cap **strips `ownerId` and dumps the item in Loose-Ends** with no owner-facing explanation. Detail for a requester still **names the proposed person**. Those are still connected-system failures.
 
-1. Proposed owner is on `SCREEN_37` → Accept → (claimed) Dashboard → later `SCREEN_34` → Mark complete → `SCREEN_33` → History.
-2. Owner on `SCREEN_34` → Decline → `SCREEN_17` → `SCREEN_16` (with undo). Requester side of this flow is **not** complete.
+**Complete flows (narrow definition: defined destination + honest state)**
+
+1. Proposed owner on Home Acceptance Tap → Accept → You own → Details → Mark complete (Owner local end).
+2. Same → Decline from proposal or from owned detail (Owner local end; copy treats decline as legitimate).
+3. Redirect → `handoff_pending` → target sees Acceptance Tap → Accept or Decline or Send to loose ends.
+4. Dismiss / 3-day TTL → `needs_ownership` → Loose-Ends → Claim.
+5. Extraction with no suggested owner → Loose-Ends.
+6. Next meeting resurface (owner) → Complete / Decline / Keep open (this meeting) / Don’t bring this up again (`dropped`).
+7. AskFred Owner: open/proposed items, pull-only, no assign CTA.
+8. AskFred Requester: waiting items with “ownership not confirmed” vs “acknowledged”, no Reassign.
+9. Manager Team rollup: aggregate rates only; privacy lock rejects individual fields.
 
 ---
 
 # 2. Complete Persona Flow Maps
 
-Reconstructed from the current catalog. **MISSING FLOW** marks a branch with no defined destination.
+Surfaces in this product (catalog mapping):
+
+| Product surface | Catalog analogue |
+|---|---|
+| Home · Acceptance tap | `SCREEN_37` |
+| Home · You own | Dashboard / `SCREEN_34` list |
+| Home · You’re waiting on | Requester visibility (was missing) |
+| Details modal | `SCREEN_34` / `35` combined |
+| Redirect modal | `SCREEN_36` (search/propose only — collision **fixed**) |
+| Clarify modal | `SCREEN_35` |
+| Loose ends tab | `SCREEN_9` / `8` / `6` |
+| Next meeting | `SCREEN_13` |
+| AskFred tab | `SCREEN_3` + Owner surface (**was missing**) |
+| Team rollup | Manager (not in original 37-frame catalog) |
+| Upload | New entry (not in catalog) |
 
 ---
 
@@ -49,231 +72,200 @@ Reconstructed from the current catalog. **MISSING FLOW** marks a branch with no 
 
 ### Flow A — Detection / Acceptance Tap
 
-**TRIGGER:** AI extracts a commitment from a meeting transcript and proposes this user as owner.
+**TRIGGER:** AI extraction (`fromExtraction`) proposes this user, or another user redirects to them (`handoff_pending`).
 
 ↓
 
-**SCREEN / STATE:** Commitment Detected — Default (`SCREEN_37`)
+**SCREEN / STATE:** Home → Acceptance tap (`needs_confirmation` or `handoff_pending`)
 
-**USER CAN (documented):**
+**USER CAN:**
 
 - Accept
 - Redirect
-- Edit wording
+- Decline
+- Details → Clarify, Send to loose ends, Not a commitment
 
-**USER CANNOT (capability required, not on this screen):**
-
-- Decline (capability 2 + 3)
-- Clarify meaning vs. merely edit text (capability 2)
-- Dismiss / skip / “not a commitment”
-- Do nothing (no timeout path)
+**USER CANNOT on the card (must open Details):** Clarify, Dismiss, Not a commitment. Acceptable if Details is obvious; **Discoverability issue:** those three are one extra click with no hint on the card.
 
 **DECISION POINT:** Does this person confirm ownership of this wording?
 
 **IF Accept:**
 
-→ System: capture commitment; set this user as owner.  
-→ Next: described as “Success Redirect (`SCREEN_36`) → Dashboard.”  
-→ End of this step: Owner has an owned open commitment (assumed).  
-→ **Issue:** `SCREEN_36` is also the Redirect search UI. Destination after success is unnamed. Requester visibility of “acknowledged” is undefined.
+→ System: `ownerId = actor`, `state = open`.  
+→ Next: toast; item moves to **You own**.  
+→ Requester Home: “Acknowledged, open” **if still unfiltered** — yes for `open`.  
+→ End of step: owned open commitment. **OK.**
 
 **IF Redirect:**
 
-→ System: open search-owner UI (`SCREEN_36`).  
-→ User picks a person (assumed).  
-→ Next for **current user:** back to Dashboard (claimed).  
-→ Next for **target:** **MISSING FLOW** — no received/accept surface.  
-→ State of commitment after send: **ambiguous** (owned by sender? pending? unowned?).
+→ Modal: “propose, don’t assign.” Target list excludes self and manager.  
+→ System: `handoff_pending`, `ownerId = null`, `proposedOwnerId = target`.  
+→ Current user: card leaves their tap.  
+→ Target: Acceptance tap. **OK — this was Critical in the catalog review.**  
+→ If target never acts: `expireProposal` after `PROPOSAL_TTL_MS` (3 days) → Loose-Ends. **OK in domain; no UI countdown.**
 
-**IF Edit wording:**
+**IF Decline (on card or Details):**
 
-→ `SCREEN_35` Edit State → Save → `SCREEN_37` or `SCREEN_34` or Dashboard (catalog contradicts itself: Save → Dashboard **and** `SCREEN_37`/`34`).  
-→ Whether Save implies Accept is **undefined**.  
-→ Cancel/Back from edit: **MISSING FLOW**.
+→ System: `declined` (proposal path does not require prior `open`).  
+→ Toast: legitimate resolution.  
+→ Requester Home: item **disappears** (terminal states filtered). **MISSING HANDOFF for Requester.**
 
-**IF Decline (required, not present):**
+**IF Details → Send to loose ends:**
 
-→ **MISSING FLOW**
+→ `needs_ownership`, proposed owner cleared. **OK.**
 
-**IF Dismiss / close / no response:**
+**IF Details → Not a commitment:**
 
-→ **MISSING FLOW** — item must not vanish (Loose-Ends principle) and must not auto-assign.
+→ `dropped`. **OK for AI-wrong.** Requester still cannot find it on Home.
 
-**IF “this is not a commitment” / AI wrong:**
+**IF Clarify:**
 
-→ **MISSING FLOW** (not the same as Decline-as-outcome of a real commitment).
+→ Save wording only; does **not** imply Accept. Cancel/Close on modal. **OK vs catalog ambiguity.**  
+→ Empty text rejected by API. **OK.**
 
-**INTENTIONAL END STATES for this trigger:** none until Accept is confirmed **and** both personas can find the record.
+**IF No response:**
+
+→ Still on Home until TTL. No silent auto-assign. **OK.** TTL is invisible.
+
+**IF Close Details / overlay click:**
+
+→ Returns to Home. **OK.**
 
 ---
 
 ### Flow B — Resolve an owned commitment
 
-**TRIGGER:** Owner opens an active commitment (from Dashboard, History, resurfacing, or AskFred — AskFred Owner **not documented**).
+**TRIGGER:** Owner opens an item from You own.
 
 ↓
 
-**SCREEN / STATE:** Active Commitment View (`SCREEN_34`)
+**SCREEN / STATE:** Details (`open`)
 
-**USER CAN (documented):**
+**USER CAN:** Complete, Decline, Redirect, No longer relevant.
 
-- Mark Complete → Success (`SCREEN_33`) → History
-- Decline → Confirmation (`SCREEN_17`) → Success (`SCREEN_16`)
-- Reassign → **MISSING FLOW** (no confirmation, no recipient accept, no pending state)
-
-**USER CAN (capability 3, not documented here):**
-
-- Keep Open
-- Needs Ownership (release to bucket without declining the work’s validity)
+**USER CANNOT here:** Keep Open, Stop resurfacing (those exist only on Next meeting). **MISSING FLOW on this surface.**
 
 **IF Mark Complete:**
 
-→ System: terminal Completed.  
-→ Owner: History.  
-→ Requester: **MISSING HANDOFF** — no defined visibility.
+→ `completed`. Item vanishes from You own. **No History. DEAD END for later lookup.**  
+→ Requester Home: vanished. AskFred Requester with a “resolved” query can still see it. **Handoff exists only if Requester knows to ask AskFred.**
 
 **IF Decline:**
 
-→ Modal `SCREEN_17` (copy unknown: punitive vs. honest?).  
-→ Confirm → `SCREEN_16` with Undo (recoverability exists **only here** in the catalog).  
-→ After undo window: **undefined**.  
-→ Requester: **MISSING HANDOFF**.
+→ No confirmation modal (catalog `SCREEN_17` was dropped). One click, toast, gone. **Recoverability gap (no undo).** Honest copy: OK.
 
-**IF Reassign:**
+**IF Redirect from owned:**
 
-→ **MISSING FLOW** for picker, consent, pending, timeout, and requester.
+→ Same handoff_pending as Flow A. Owner loses `ownerId` immediately. **OK consent; abrupt for Owner if they mis-tap (no undo).**
 
-**IF Keep Open from active (not only from resurfacing):**
+**IF No longer relevant:**
 
-→ **MISSING FLOW**
+→ `dropped`. Same History/Requester Home gap.
 
 ---
 
-### Flow C — Recurring resurfacing
+### Flow C — Resurfacing
 
-**TRIGGER:** Unresolved owned (or unowned?) commitment matches a later meeting/context.
+**TRIGGER:** Owner (or anyone) opens **Next meeting**. `GET /api/meetings/:id/resurface` **mutates** `resurfaceCount` via `applyResurfaceVisit`.
 
 ↓
 
-**SCREEN / STATE:** Resurface (`SCREEN_13`)
+**SCREEN / STATE:** Next meeting cards (forced chip `open`)
 
-**USER CAN (documented):**
+**IF Owner:** Complete, Decline, Keep open, Don’t bring this up again.
 
-- Keep open → suppress reminder **for this meeting**; stay on same screen
+**IF Not owner:** “Visible for context. Only the owner can resolve it.” **OK — not a public shame list of inaction, but owner **name** is shown.** Neutral-ish.
 
-**USER CAN (capability 4, not documented):**
+**IF Keep open:** `suppressMeetingId` for this meeting only. Will still appear in a later meeting. **Decay is not this control; cap is.**
 
-- Complete / Reassign / Decline / Needs Ownership
-- Stop resurfacing / “no longer relevant” (decay)
+**IF Don’t bring this up again:** `dropped` (not a performance miss in toast). **OK graceful stop.**
 
-**IF Keep open:**
+**IF ignore the tab:** Count still increments because **opening the tab visits the endpoint**. A curious Requester or Manager viewing Next meeting burns a resurface for the Owner. **Broken junction.**
 
-→ Suppress this meeting only.  
-→ Next meeting: likely resurfaces again.  
-→ **MISSING FLOW:** graceful stop; max resurface count; what Requester sees; private vs. public.
+**IF `resurfaceCount >= MAX_RESURFACES` (2):** `markResurfaced` sets `needs_ownership` and **clears ownerId**. Item leaves You own and appears in Loose-Ends. Owner is not told why. **This is a silent ownership revocation — High severity, anti-trust if it feels like punishment.**
 
-**IF user ignores resurfacing card:**
-
-→ **MISSING FLOW** (must not shame; must not loop forever).
+**IF meeting.cancelled:** resurface list empty; no resurrection. **OK (edge 9).**
 
 ---
 
-### Flow D — Loose-Ends as Owner-to-be (claim)
+### Flow D — AskFred (Owner)
 
-**TRIGGER:** Owner (or any participant) sees unowned item on Home (`SCREEN_9`).
+**TRIGGER:** AskFred tab, persona = Owner (independent of “Viewing as”).
 
-↓
+**USER CAN:** Type a question, Ask.
 
-**SCREEN / STATE:** Loose-Ends list (`SCREEN_9`) → detail (`SCREEN_8` / `SCREEN_6`)
-
-**USER CAN (documented):**
-
-- Claim it → becomes Owner → `SCREEN_34`
-- Reassign from bucket → **MISSING FLOW** (same handoff hole)
-
-**USER CAN (not documented):**
-
-- Open detail then Back / Next item (prior memo flagged this)
-- “I don’t know” / add context without claiming
-- Leave it (correct: bucket remains)
-
-**IF Claim:**
-
-→ Owned/Open. Consent is implicit in Claim — **aligned with principle**.  
-→ Requester: **MISSING HANDOFF**.
-
----
-
-### Flow E — AskFred (Owner)
-
-**TRIGGER:** Owner asks “What do I own / agree to / remains open?”
-
-↓
-
-**SCREEN / STATE:** **NOT IN CATALOG**
-
-**MISSING FLOW** for Owner AskFred, empty answers, low confidence, and permission.
+**USER CANNOT:** Navigate to a commitment from the answer list (IDs are inert). **MISSING FLOW.**  
+**USER CAN:** Set persona to Requester while still “Viewing as” Alex — cross-persona leak by **self-service toggle**, not ACL. Demo-acceptable; production **must bind persona to the signed-in user**.
 
 ---
 
 ## Commitment Requester / Stakeholder
 
-### Flow F — Status via AskFred
+### Flow E — Waiting on
 
-**TRIGGER:** Needs to know if something they are waiting on is acknowledged or resolved.
-
-↓
-
-**SCREEN / STATE:** AskFred — Requester Query (`SCREEN_3`)
-
-**USER CAN (documented):**
-
-- View status (neutral)
-- Follow-up: Reassign / Leave open
-
-**DECISION POINT:** Follow-up actions on `SCREEN_3` conflict with “visibility without a mechanism to police.”
-
-**IF View status:**
-
-→ Neutral copy (good in principle).  
-→ What fields are shown (owner name, latency, private notes): **undefined**.  
-→ Next: conversation stays on `SCREEN_3` (acceptable pull-based end).
-
-**IF Follow-up Reassign:**
-
-→ Requester initiating reassignment **is a control action**, not visibility.  
-→ Destination / consent of new owner: **MISSING FLOW**.  
-→ **Product-principle risk:** policing.
-
-**IF Leave open:**
-
-→ Whose Keep Open? Requester cannot keep the Owner’s item open without becoming a nag. Meaning **undefined**.
-
-**IF AskFred is wrong / cannot answer / no permission:**
-
-→ **MISSING FLOW**
-
----
-
-### Flow G — Loose-Ends (shared awareness)
-
-Same `SCREEN_9` / `8` / `6` as Owner. Requester can Claim (then they become Owner — persona switch, **junction**) or Reassign (**MISSING**).
-
-**No documented Requester-only read path** that is not the shared bucket or AskFred. If the item is owned, Requester may have **nowhere** except AskFred — and Owner AskFred vs Requester AskFred boundaries are unspecified.
-
----
-
-### Flow H — After Owner resolves
-
-**TRIGGER:** Owner completes, declines, reassigns, or claims.
+**TRIGGER:** Home as the person in `requesterId`.
 
 ↓
 
-**SCREEN / STATE:** **NONE DEFINED for Requester**
+**SCREEN / STATE:** You’re waiting on — **status only, no chase controls.** Matches principle.
 
-Pull-based AskFred *could* be the only surface (aligned with no notification spam) **if** AskFred is specified to return the new state. It is not.
+**USER CAN:** Open Details (read). Chip: Ownership not confirmed / Needs ownership / Acknowledged, open.
 
-**MISSING FLOW:** Requester next action after honest decline (accept the decline, re-request in a future meeting, or claim themselves).
+**USER CANNOT:** Reassign, nudge, Accept for someone else. **OK.**
+
+**IF Owner completes / declines / drops:**
+
+→ Filter `state !== completed && !== declined && !== dropped` **removes the row**. Requester’s question “has this been resolved?” is **unanswered on Home**. **MISSING FLOW (same critical gap as catalog, only AskFred can fill it).**
+
+**IF Owner accepts:**
+
+→ “Acknowledged, open”. **OK.**
+
+**IF Details as requester of an `open` item:**
+
+→ No owner-resolution buttons (not proposed-to-me, not owner). Close only. **OK.**  
+→ Meta still shows **“proposed {name}”** even when requester should only see confirmed vs not. **Persona boundary leak.**
+
+---
+
+### Flow F — Loose-Ends (shared)
+
+**TRIGGER:** Loose ends tab. **Not scoped to the viewer** — every `needs_ownership` item is listed for every user, including manager Dana.
+
+**USER CAN:** Claim it, Propose someone, Details.
+
+**IF Claim:** opt-in `open`. **OK.**  
+**IF Propose:** handoff_pending. **OK.**  
+**Principle risk:** a global bucket can become “who failed to accept.” Copy says it is not a failure list; **no names of people who dismissed** are shown — good. Items are still org-wide.
+
+**Drop from bucket:** Details for `needs_ownership` does **not** offer “no longer relevant.” Only Claim / Propose. Requester cannot close a stale unowned item. **MISSING FLOW (edge 6/12).**
+
+---
+
+### Flow G — AskFred (Requester)
+
+No Reassign. Status vocabulary is non-policing. Empty: “You are not waiting on any tracked commitments.” **OK.**  
+Resolved query path exists in `answerAskFred` if the user asks about resolved/complete/declined. **Not discoverable from Home.**
+
+---
+
+## Manager
+
+### Flow H — Team rollup
+
+14-day rate, baseline 28%, target 45%, completed/declined/dropped all count. Privacy lock on individual keys. AskFred manager persona (API-only) refuses people lists. **OK for anti-surveillance.**  
+No path from rollup into a person. **Intentional.**
+
+---
+
+## Upload (new entry)
+
+**TRIGGER:** Upload tab → Process meeting.
+
+**IF success:** Summary + extracted cards with status chip, **no Accept/Redirect**. User must infer Home. **Orphan result list / missing next step.**  
+**IF video/audio file:** inline note, do not process. **OK.**  
+**IF extraction 502:** error string. **OK.**  
+**IF `requesterId` null from model:** stored as `""`; waiting view never shows it. **Broken requester handoff for that item.**
 
 ---
 
@@ -281,42 +273,29 @@ Pull-based AskFred *could* be the only surface (aligned with no notification spa
 
 | Screen/State | User Action | Expected System Response | Next State | Defined? | Issue |
 |---|---|---|---|---|---|
-| `SCREEN_37` | Accept | Confirm ownership; item owned/open | Dashboard (unnamed) via `SCREEN_36` success | Partial | `SCREEN_36` overloaded; requester unaware; undo undocumented |
-| `SCREEN_37` | Redirect | Propose different owner; do **not** auto-assign | Pending handoff for target | **No** | Target has no screen; state after send unknown |
-| `SCREEN_37` | Edit wording | Open editor | `SCREEN_35` | Yes | |
-| `SCREEN_37` | Decline | Honest resolution or release to Needs Ownership | Declined **or** Needs Ownership | **No** | **MISSING FLOW** vs capabilities 2–3 |
-| `SCREEN_37` | Close / Dismiss / Skip | Must not auto-assign; must not disappear | Needs Ownership / Bucket | **No** | Vanishing or silent assign both violate principles |
-| `SCREEN_37` | No response (time passes) | Shared awareness, not a failure list | Needs Ownership / Bucket | **No** | **MISSING FLOW** |
-| `SCREEN_37` | Not a commitment / AI wrong | Remove or correct extraction; not “Declined” | Dropped / corrected | **No** | Distinct from Decline-as-outcome |
-| `SCREEN_36` | Search + pick owner | Start consentful handoff | Handoff pending | **No** | Sender returns to Dashboard; receiver dead end |
-| `SCREEN_36` | Cancel search | Return without changing owner | `SCREEN_37` | **No** | Cancel undocumented |
-| `SCREEN_36` | (Success after Accept) | Confirmation | Dashboard | Collision | Same ID as Redirect UI — **broken IA** |
-| `SCREEN_35` | Save | Update text | `37` / `34` / Dashboard | Contradictory | Three destinations in the memo |
-| `SCREEN_35` | Save | Does Save = Accept? | Owned vs still proposed | **No** | Silent assignment risk |
-| `SCREEN_35` | Cancel / Back | Discard edits | `SCREEN_37` | **No** | |
-| `SCREEN_34` | Mark Complete | Terminal complete | `SCREEN_33` → History | Yes (Owner) | Requester visibility **No**; reverse after History **No** |
-| `SCREEN_34` | Decline | Confirm then record honest decline | `SCREEN_17` → `SCREEN_16` | Yes (Owner) | Requester **No**; tone of modal unknown |
-| `SCREEN_34` | Reassign | Consentful handoff | Pending → new owner | **No** | **MISSING FLOW** |
-| `SCREEN_34` | Keep Open / Needs Ownership | Stay open or release | Open / Bucket | **No** | Outcomes listed in brief, not on screen |
-| `SCREEN_17` | Confirm decline | Persist Declined | `SCREEN_16` | Yes | |
-| `SCREEN_17` | Cancel modal | No state change | `SCREEN_34` | **No** | Assumed, not specified |
-| `SCREEN_16` | Undo | Restore prior owned/open | `SCREEN_34` | Partial | Window length, then lock, requester during undo: **No** |
-| `SCREEN_16` | Dismiss success | — | History or Dashboard | **No** | Exit unspecified |
-| `SCREEN_33` | Continue | — | History | Partial | History screen undescribed (empty, filters, requester?) |
-| `SCREEN_13` | Keep open | Suppress this meeting’s resurface | Same screen; still Open | Partial | Infinite resurface; no decay; no Complete/Decline on this frame |
-| `SCREEN_13` | Complete / Decline / Reassign | Same as `SCREEN_34` | Terminal or pending | **No** | Resurface without resolution actions |
-| `SCREEN_13` | Ignore card | Neutral; no shame | Decay or next relevant context | **No** | |
-| `SCREEN_9` | Claim | User becomes owner | `SCREEN_34` | Yes | Requester/others’ view **No**; accidental claim undo **No** |
-| `SCREEN_9` | Reassign | Handoff | Pending | **No** | Same as Redirect black hole |
-| `SCREEN_9` | Tap row | Open detail | `SCREEN_8`/`6` | Partial | Back / next item undocumented |
-| `SCREEN_9` | Empty bucket | Reassurance, not shame | Stay / AskFred | **No** | Empty state missing |
-| `SCREEN_8`/`6` | Claim / Reassign | Same as list | `SCREEN_34` / pending | Partial | Reassign hole; Back hole |
-| `SCREEN_8`/`6` | Close | Return to `SCREEN_9` | `SCREEN_9` | **No** | Prior dead-end |
-| `SCREEN_3` | Ask status | Persona-safe answer | Stay in AskFred | Partial | Boundaries, confidence, permissions **No** |
-| `SCREEN_3` | Follow-up Reassign | Must not police Owner | — | Conflict | Action contradicts Requester principle |
-| `SCREEN_3` | Leave open | Unclear actor | — | **No** | |
-| (none) | Owner AskFred | Pull list of owned/open | AskFred Owner | **No** | Capability 5 missing |
-| (none) | Recipient of Redirect | Accept / Redirect / Decline / Clarify | Owned / pending / bucket | **No** | **Critical dead end** |
+| Acceptance tap | Accept | Opt-in owner | `open` on You own | **Yes** | — |
+| Acceptance tap | Redirect | Propose other | `handoff_pending` on target Home | **Yes** | No TTL shown |
+| Acceptance tap | Decline | Terminal declined | `declined` | **Yes** | No confirm; Requester Home hides it |
+| Details (proposal) | Clarify save | Text only | Same consent state | **Yes** | Card does not advertise Clarify |
+| Details (proposal) | Send to loose ends | Unowned | `needs_ownership` | **Yes** | — |
+| Details (proposal) | Not a commitment | Dropped | `dropped` | **Yes** | Requester Home hides it |
+| Details (open) | Complete | Terminal | `completed` | **Partial** | No History; no undo |
+| Details (open) | Decline | Terminal | `declined` | **Partial** | No `SCREEN_17`; no undo |
+| Details (open) | Redirect | Handoff | `handoff_pending` | **Yes** | No undo if mis-tap |
+| Details (open) | Keep open | Suppress meeting | still `open` | **No on this screen** | Only Next meeting |
+| Next meeting | Keep open | Suppress this meeting | `open` | **Yes** | One meeting only (documented) |
+| Next meeting | Don’t bring up again | Stop | `dropped` | **Yes** | — |
+| Next meeting | Open tab | Increment count | may cap → bucket | **Yes, harmful** | Visit = consume; any persona |
+| Cap after 2 | (system) | Strip owner | `needs_ownership` | **Yes** | No explanation; feels punitive |
+| Loose ends | Claim | Opt-in | `open` | **Yes** | — |
+| Loose ends | Propose someone | Handoff | `handoff_pending` | **Yes** | Infinite redirect hops allowed |
+| You’re waiting on | Open details | Read | same | **Partial** | Proposed name shown |
+| You’re waiting on | (owner resolved) | See outcome | — | **No** | Row deleted |
+| AskFred | Ask | Answer + items | stay | **Partial** | Items not clickable; persona toggle unbound |
+| Upload results | (none) | — | Home (unstated) | **No** | Orphan cards |
+| Toast | Dismiss | Hide toast | stay | **Yes** | — |
+| Modal | Close / overlay | Dismiss | parent | **Yes** | Overlay-click is easy mis-cancel |
+| Proposal TTL | time passes | Bucket | `needs_ownership` | **Yes domain** | No surface |
 
 ---
 
@@ -324,299 +303,183 @@ Pull-based AskFred *could* be the only surface (aligned with no notification spa
 
 ## Critical
 
-### DEAD END 1 — Redirect / Reassign has no receiving journey
+### DEAD END 1 — Requester cannot see resolution on Home
 
-**Where:** `SCREEN_36` (and `SCREEN_34` Reassign, `SCREEN_9` Reassign)  
-**Persona:** Redirect target (future Owner); also original sender (false “done”); Requester  
-**Trigger:** Pick another person as owner.  
-**Why dead end:** Commitment leaves the sender’s proposed list. No screen for the target to Accept / Redirect / Decline / Clarify. State is not Pending. Item may be invisible to both, or silently assigned (forbidden).  
-**User impact:** False ownership, lost work, or silent assignment.  
+**Where:** Home → You’re waiting on (`App.tsx` filter).  
+**Persona:** Requester.  
+**Trigger:** Owner Complete / Decline / Drop / proposal Decline.  
+**Why:** The row is removed. The Requester need was “has this been acknowledged **or resolved**.”  
+**Impact:** Forces chase or a lucky AskFred query. Violates the Requester contract.  
 **Severity:** Critical  
-**Fix:** Handoff-pending state + reuse Acceptance Tap for the **recipient** (modify `SCREEN_37`, do not only add a notification). Timeout → Loose-Ends, never a shame list.  
-**Required:** State `Handoff pending` + recipient `SCREEN_37` variant (modification) + sender/requester pull status in AskFred.
+**Fix:** **A.** Keep terminal items on Home under “Recently resolved” (status only, no chase). Do not add nag CTAs.
 
-### DEAD END 2 — No-response after proposal
+### DEAD END 2 — Owner has no History
 
-**Where:** After `SCREEN_37` shown (or never opened)  
-**Persona:** Proposed owner, Requester, meeting group  
-**Trigger:** User dismisses, skips, or never opens.  
-**Why:** Item cannot auto-assign; cannot disappear. Bucket path is a capability, not wired from this decision.  
-**User impact:** Lost commitments or illegal auto-ownership.  
+**Where:** You own lists `view=owned` (`state === open` only).  
+**Persona:** Owner.  
+**Trigger:** Complete / Decline / Drop / stop-resurface.  
+**Why:** The record is unfindable in-product except AskFred resolved queries.  
+**Impact:** “Did I already close this?” has no place to look.  
 **Severity:** Critical  
-**Fix:** Dismiss/timeout → `Needs Ownership` in Loose-Ends with **neutral** copy (unowned, not “failed to act”).  
-**Required:** Modification of `SCREEN_37` (Dismiss) + system rule; not a new monitoring feed.
-
-### MISSING FLOW 3 — Decline not on Acceptance Tap
-
-**Where:** `SCREEN_37`  
-**Persona:** Proposed owner  
-**Trigger:** “This shouldn’t be mine / I won’t take this.”  
-**Why:** Capabilities 2–3 require Decline where appropriate. Only Decline on `SCREEN_34` (already owned) is specified. Declining a **proposal** vs declining an **accepted** commitment are different junctions.  
-**Severity:** Critical  
-**Fix:** Add Decline on `SCREEN_37` with outcome **Needs Ownership** (default) vs **Not a commitment** (extraction error). Do not use failure styling (`SCREEN_17` must be reviewed).
-
-### MISSING FLOW 4 — Requester never sees Owner outcomes
-
-**Where:** After Complete / Decline / Claim / Handoff  
-**Persona:** Requester  
-**Trigger:** Any Owner resolution.  
-**Why:** Requester need is “acknowledged or resolved without chasing.” No screen, AskFred contract, or dashboard widget is specified. Push notifications would violate “not notification-heavy”; **pull** must be specified.  
-**Severity:** Critical  
-**Fix:** AskFred Requester (`SCREEN_3`) must return state + timestamp + **whether ownership is confirmed**, without owner activity feeds. Optional: Requester “waiting on” list (read-only), not a nag CTA.
-
----
+**Fix:** **C.** History section (Owner) — catalog `SCREEN_33`. Read-only terminals.
 
 ## High
 
-### DEAD END 5 — Resurface without decay or resolution actions
+### DEAD END 3 — Resurface cap silently un-owns
 
-**Where:** `SCREEN_13`  
-**Persona:** Owner (and anyone who sees the card)  
-**Trigger:** Keep open, or ignore.  
-**Why:** Capability 4 forbids indefinite resurfacing and a second backlog. Keep open only suppresses **this meeting**. No stop, no “no longer relevant,” no Complete/Decline on the card.  
-**User impact:** Recurring public reminder ≈ shame + backlog.  
+**Where:** `markResurfaced` when `resurfaceCount >= MAX_RESURFACES`.  
+**Persona:** Owner (and Requester who still thinks it is acknowledged).  
+**Trigger:** Two Next-meeting visits (including non-owner visits).  
+**Why:** Consent was given; system revokes it into a shared bucket without an Owner confirmation.  
+**Impact:** Looks like a failure list; Owner loses control.  
 **Severity:** High  
-**Fix:** Same resolution set as `SCREEN_34` on the resurface card; decay after N relevant contexts or Owner “drop as no longer relevant”; never a public streak.
+**Fix:** **A.** Keep `ownerId`; overlay state `resurfaced_exhausted` **or** require Owner “release to Loose-Ends.” Do **not** auto-clear consent. Visiting the tab must not increment for non-owners.
 
-### DEAD END 6 — Reassignment not accepted
+### DEAD END 4 — Upload results do not enter the ownership loop
 
-**Where:** After Redirect/Reassign sent  
-**Persona:** Sender, intended owner, Requester  
-**Trigger:** Target ignores or declines.  
-**Why:** No timeout, no return to bucket, no restore to sender as **proposed** (not assigned).  
+**Where:** Upload success list.  
+**Persona:** Proposed owner (often the uploader, not necessarily).  
+**Trigger:** Process meeting.  
+**Why:** Cards have no actions; no “Go to Acceptance tap.”  
 **Severity:** High  
-**Fix:** Target Decline / timeout → `Needs Ownership`. Sender is not silently re-bound. AskFred: “ownership not confirmed.”
+**Fix:** **A.** Same Accept/Redirect/Decline actions as Home, or auto-switch tab to Home with toast.
 
-### DEAD END 7 — AI wrong vs Decline-as-outcome conflated
+### MISSING FLOW 5 — Keep Open / decay controls missing on owned detail
 
-**Where:** Should be on `SCREEN_37` / `SCREEN_35`  
-**Persona:** Proposed owner  
-**Trigger:** Extraction is not a commitment, or wrong person/text.  
-**Why:** Treating false positives as “Declined” pollutes Requester view and shames.  
+**Where:** Details for `open`.  
 **Severity:** High  
-**Fix:** `SCREEN_35` + “Not a commitment” / “Wrong person” actions; Dropped/corrected is not Declined.
-
-### DEAD END 8 — Loose-end detail has no exit
-
-**Where:** `SCREEN_9` → `SCREEN_8`/`6`  
-**Persona:** Any  
-**Trigger:** Open a row.  
-**Why:** No Back, Next, or close. User trapped or force-exits the app.  
-**Severity:** High (was Medium; trapping a shared surface is a real break)  
-**Fix:** Standard close to `SCREEN_9`; optional Next unowned item.
-
-### MISSING FLOW 9 — Owner AskFred
-
-**Where:** Capability 5  
-**Persona:** Owner  
-**Trigger:** Pull “what did I agree to?”  
-**Severity:** High  
-**Fix:** Same AskFred shell as `SCREEN_3` with **Owner-scoped** answers; not a task list product.
-
----
+**Fix:** **A.** Add Keep open (needs a meeting context picker) and Don’t bring this up again, or a single “Stop resurfacing” that does not require opening Next meeting.
 
 ## Medium
 
-### DEAD END 9 — `SCREEN_36` identity collision
+### DEAD END 6 — No undo / Decline confirm
 
-**Where:** Accept success vs Redirect search  
-**Persona:** Owner  
-**Why:** Two destinations, one ID → broken transitions and QA.  
-**Severity:** Medium  
-**Fix:** Split frames or states; success is a toast on Dashboard, not a second meaning of Redirect.
+Catalog `SCREEN_17`/`16` Undo is gone. Mis-tap Complete/Decline/Redirect is permanent.  
+**Fix:** **B.** Short undo toast (already have toast infrastructure) restoring previous state.
 
-### MISSING FLOW 10 — Save-on-edit assignment ambiguity
+### MISSING FLOW 7 — Stale Loose-End cannot be dropped by requester
 
-**Where:** `SCREEN_35`  
-**Severity:** Medium  
-**Fix:** Save edits without accepting; Accept remains explicit on `SCREEN_37`.
+**Fix:** **A.** Guarded “No longer relevant” on bucket Details for requester (not a public shame control).
 
-### MISSING FLOW 11 — Accidental Claim / Complete / Decline recovery
+### MISSING FLOW 8 — AskFred answers are not a junction
 
-**Where:** `SCREEN_9` Claim; `SCREEN_33`; History  
-**Why:** Undo only on `SCREEN_16`.  
-**Severity:** Medium  
-**Fix:** Same short undo pattern as `SCREEN_16` on Claim and Complete; not a workflow engine.
-
-### MISSING FLOW 12 — Duplicate mentions across meetings
-
-**Where:** Detection  
-**Severity:** Medium  
-**Fix:** Link/merge into one commitment; resurface as same ID; no duplicate bucket rows.
-
-### MISSING FLOW 13 — Requester “Follow-up Reassign” on AskFred
-
-**Where:** `SCREEN_3`  
-**Severity:** Medium (principle break)  
-**Fix:** Remove Reassign from Requester AskFred. Offer “Has this been acknowledged?” only. If work is unowned, point to Loose-Ends **claim** (consent), not assign-others.
-
----
+Items do not open Details.  
+**Fix:** **A.** Click item → Details.
 
 ## Low
 
-### MISSING FLOW 14 — Empty / error / invalid search
-
-Dashboard empty, bucket empty, AskFred no matches, owner search zero results, network error: none specified.
-
-### MISSING FLOW 15 — History as a product surface
-
-`SCREEN_33` lands on History with no actions, filters, or Requester access rules.
+- Infinite redirect ping-pong (no hop cap; both can Redirect forever). Prefer hop limit then bucket.
+- No UI for 3-day proposal TTL.
+- Overlay click closes Redirect/Clarify (easy abort). Prefer Close button only for destructive-adjacent modals.
+- Partial completion / blocked: only Keep open, no note field.
+- Owner leaves team: no admin release-to-bucket.
+- Duplicate detections across meetings: no merge (`seriesId` helps resurface, not identity).
+- `requesterId ?? ""` on upload.
 
 ---
 
 # 5. Missing Screens / Required Modifications
 
-Preference order: **A modify → B modal → C new**.
+Prefer A → B → C.
 
-| Gap | Type | Solution |
-|---|---|---|
-| Recipient of Redirect/Reassign | **A** | `SCREEN_37` variant: “Proposed to you by [Name] from [Meeting]” + Accept / Redirect / Clarify / Decline |
-| Handoff waiting | **B** | Dashboard/AskFred status chip “Ownership not confirmed yet” — not a chase notification |
-| Timeout / dismiss from proposal | **A** | `SCREEN_37` Dismiss; system → Loose-Ends |
-| Decline on proposal | **A** | `SCREEN_37` Decline → Needs Ownership **or** Not a commitment |
-| AI correction | **A** | `SCREEN_35` + “Not a commitment” |
-| Resurface decay + actions | **A** | `SCREEN_13` = compact `SCREEN_34` + “Don’t bring this up again” |
-| Detail Back | **A** | `SCREEN_8`/`6` close → `SCREEN_9` |
-| `SCREEN_36` split | **A** | Redirect picker only; Accept success = toast |
-| Save ≠ Accept | **A** | `SCREEN_35` |
-| Requester visibility | **A** | `SCREEN_3` contracts; optional read-only “Waiting on” |
-| Owner AskFred | **A** | Same shell, Owner scope (`SCREEN_3` sibling state) |
-| Mutual non-ownership / stalemate | **B** | Bucket copy: “No confirmed owner yet” — never names who ignored |
-| Owner left team / Requester left | **B** | Auto Needs Ownership; AskFred: “No current owner” |
-| Blocked / partial | **B** | Optional note on `SCREEN_34`: Keep Open + “blocked by…” without becoming a PM tool |
-| Meeting cancelled before resurface | **A** | Resurface scheduler: next **relevant** remaining context or decay |
-| Permission denied / low confidence AskFred | **B** | Inline AskFred states |
-| Undo Claim/Complete | **B** | Toast undo like `SCREEN_16` |
-| True new: Handoff if `SCREEN_37` cannot show “from person” | **C** | Only if variant is unreadable — see NEW SCREEN below |
-| True new: Stalemate resolution when two people Redirect to each other | **C** | Only if bucket claim is insufficient — prefer bucket |
-| True new: Decay confirmation | **B** | “We’ll stop bringing this up. It stays findable in AskFred as dropped.” |
+### A. Home — Recently resolved (Requester + Owner)
 
----
+**Purpose:** Close Dead Ends 1–2 without a task-manager.  
+**Entry:** Same Home.  
+**Show:** Terminal status chips only.  
+**Actions:** None for Requester; Owner optional “Undo” in a short window.  
+**Closes:** Cross-persona resolution visibility.
 
-### NEW SCREEN: Commitment proposed to you (only if `SCREEN_37` cannot carry provenance)
+### A. Next meeting — do not mutate on GET for observers; do not strip owner on cap
 
-**Purpose:** Close Redirect/Reassign consent. System proposes; **this user** confirms.  
-**Entry:** Handoff targeting this user (in-product card on next relevant meeting or Home — **not** a reminder storm).  
-**Persona:** Proposed Owner.  
-**Information displayed:**
+**Purpose:** Decay without punishment.  
+**Change:** Idempotent read vs explicit “shown in this meeting” write; cap → Owner prompt, not auto-unowned.
 
-- Commitment text + meeting excerpt  
-- Who redirected and why (optional one line)  
-- This is a proposal, not an assignment  
-- Status: ownership not confirmed  
+### A. Upload results — attach Acceptance Tap actions
 
-**Primary actions:** Accept · Redirect · Clarify · Decline (to bucket or not-a-commitment)  
-**Secondary:** Dismiss (→ bucket, neutral)  
-**Decision points:** Same as Acceptance Tap.  
-**Outcomes:** Owned · Handoff pending (new target) · Needs Ownership · Dropped  
-**System response:** Never assign without Accept. AskFred Requester: “Proposed to [Name]; not confirmed.” No public ignore counter.  
-**Exit:** Home / next proposed item / AskFred.  
-**Closes:** Dead End 1 and 6.
+### A. Details (open) — resurfacing controls
 
----
+### A. Details (requester) — hide proposed person name
 
-### MODAL: Stop resurfacing / no longer relevant
+Show “Ownership not confirmed” without a name until Accept/Claim.
 
-**Purpose:** Graceful decay (capability 4).  
-**Entry:** `SCREEN_13` or `SCREEN_34`.  
-**Persona:** Owner (Requester does **not** get this as a nudge tool).  
-**Displayed:** Item stays searchable as Dropped; will not appear in future meetings.  
-**Actions:** Confirm stop · Cancel  
-**Outcomes:** Dropped / No Longer Relevant (terminal) vs remain Open.  
-**Closes:** Dead End 5.
+### A. Bind AskFred persona to the signed-in user
 
----
+Remove the Owner/Requester dropdown in production; keep for demo with a banner.
 
-### ASKFred STATES (modify `SCREEN_3`, do not add a second chatbot)
+### B. Undo toast after Complete / Decline / Redirect / Drop
 
-**Owner mode:** my open / agreed / remaining.  
-**Requester mode:** waiting-on status; acknowledged yes/no; resolved outcome; **not** Owner’s private keep-open notes; **not** Reassign.  
-**Low confidence:** “I’m not sure this is the same item” + link to transcript excerpt.  
-**No permission:** “You don’t have access to that commitment.”  
-**Empty:** “Nothing open that you’re waiting on.”
+### B. Decline confirmation (restore catalog honesty check, one sentence, not punitive)
+
+### C. NEW SCREEN: History
+
+Only if Home cannot hold terminals without clutter. Catalog already specified `SCREEN_33`.
+
+### Do not add
+
+- Reminder settings, email nudges, personal scoreboards, Requester Reassign, auto-assign on timeout.
 
 ---
 
 # 6. Junction and Handoff Review
 
-| Junction | Cause | Before → After | Who sees | Notified? | Next persona informed? | Consent? | Ambiguous ownership? | Handoff |
-|---|---|---|---|---|---|---|---|---|
-| Detected → Ownership Proposed | AI | Detected → Needs confirmation | Proposed owner | Unknown | Requester unknown | N/A | Proposed ≠ owned — **must be explicit** | Partial (`SCREEN_37`) |
-| Proposed → Accepted | Accept | Proposed → Owned/Open | Owner; Requester **undefined** | Unknown | **No** | Yes | Clear if Accept only | **Missing Requester** |
-| Proposed → Redirected | Redirect | Should be Handoff pending | Sender thinks done; target **none** | Unknown | **No** | **Required, missing** | **Yes — critical** | **Missing** |
-| Proposed → Declined | Decline on tap | Should be Needs Ownership or Dropped | Bucket | No spam | Requester via pull | N/A | Decline ≠ failure | **Missing on `37`** |
-| Unowned → Bucket | Dismiss/timeout/no owner | Needs Ownership | Shared, **neutral** | No | Group via bucket | No assign | Clear unowned | **Not wired** |
-| Bucket → Claimed | Claim | Unowned → Owned | Owner; others **undefined** | No | **No** | Yes (self) | Clear | **Missing Requester** |
-| Claimed → Open | Same as claim | Open | Owner | — | — | — | — | OK locally |
-| Open → Complete | Mark complete | Completed | Owner History; Requester **no** | Must not spam | **No** | Owner control | Clear | **Missing** |
-| Open → Reassigned | Reassign | Should be pending | — | — | **No** | **Missing** | **Yes** | **Missing** |
-| Open → Declined | Decline | Declined | Owner success; Requester **no** | — | **No** | Owner control | Clear if honest | **Missing Requester** |
-| Open → Resurfaced | Scheduler | Open + meeting context | Card `13` | In-meeting only (good) | Risk of public shame if copy is accusatory | — | Still owned | Decay **missing** |
-| Resurfaced → Resolved | Actions missing on `13` | Terminal | — | — | **No** | — | — | **Broken** |
-| Resurfaced → Keep Open | Keep open | Open, suppress 1 meeting | Same | No | Requester: **nothing defined** | Owner | Still owned | Weak |
-| Owner action → Requester | Any | State change | Pull only **unspecified** | Must stay pull | **No** | — | — | **Missing all** |
-| Requester AskFred Reassign | Follow-up | Would seize control | — | — | Policing | Violates consent | — | **Remove** |
-| Two Redirects to each other | Both refuse | Should stay unowned | Bucket | No | Both see unowned | — | Must not ping-pong | **Missing** (use bucket) |
-| New owner never accepts | Timeout | Pending → Bucket | Shared | No | “Not confirmed” | — | Clear unowned | **Missing** |
+| Junction | Cause | Before | After | Who sees | Notified | Next persona knows? | Consent? | Ambiguous ownership? | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| Detected → Proposed | Extraction with suggest | — | `needs_confirmation` | Proposed Home | In-product only | Yes | Required next | No | **OK** |
+| Detected → Bucket | No suggest | — | `needs_ownership` | Shared tab | No | Yes | Claim later | No | **OK** |
+| Proposed → Accepted | Accept | pending | `open` | Owner You own; Requester acknowledged | No ping | Yes | Yes | No | **OK** |
+| Proposed → Redirected | Redirect | pending | `handoff_pending` | Target tap | No ping | Target yes; Requester still “not confirmed” | Target must accept | No | **OK** |
+| Proposed → Declined | Decline | pending | `declined` | Owner gone; Requester **gone** | No | **No** | Owner | Clear declined, **hidden** | **Missing Requester** |
+| Proposed → Bucket | Dismiss / TTL | pending | `needs_ownership` | Bucket | No | Requester “Needs ownership” | — | Clear unowned | **OK** |
+| Bucket → Claimed | Claim | unowned | `open` | Owner; Requester acknowledged | No | Yes | Yes | No | **OK** |
+| Open → Complete | Complete | open | `completed` | Neither Home list | No | **No** | Owner | Clear, **hidden** | **Missing** |
+| Open → Reassigned | Redirect | open | `handoff_pending` | Target | No | Requester “not confirmed” again | Target | Brief unowned | **OK** |
+| Open → Declined | Decline | open | `declined` | Hidden | No | **No** | Owner | Hidden | **Missing Requester** |
+| Open → Resurfaced | GET visit | open | count++ | Meeting tab | In-meeting | Context yes | Owner resolve | Still owned until cap | **Visit side-effect** |
+| Resurfaced → Keep Open | Keep open | open | suppress meeting | Same | No | Requester unchanged | Owner | Still owned | **OK weak** |
+| Cap → Bucket | 2 visits | open owned | unowned | Bucket | No | Requester needs ownership; Owner **surprised** | **Revoked** | **Yes** | **Broken** |
+| Owner action → Requester | Any terminal | — | hidden | AskFred only | Must stay pull | **Only if they ask** | — | — | **Partial** |
+| AskFred Requester Reassign | — | — | — | — | — | — | Would violate | — | **Removed (OK)** |
+| Cancelled meeting | series cancelled | — | no list | — | No | — | — | — | **OK** |
+| Manager rollup | open tab | — | aggregates | Manager | No | No people | — | — | **OK** |
 
-**Notification rule (principle):** No chase pings. Visibility = Loose-Ends + AskFred pull + in-meeting resurface with decay. Any “notify new owner” must be **at most** an in-product Home card, not a reminder system.
+**Notification rule:** Still no chase pings. Keep it that way. Visibility holes must be filled with **pull surfaces** (Home resolved, History, AskFred), not reminders.
 
 ---
 
 # 7. Commitment State Machine
 
-## States required (current catalog is insufficient)
+Implemented states: `needs_confirmation` | `handoff_pending` | `needs_ownership` | `open` | `completed` | `declined` | `dropped`.
 
-| State | How entered | Actions | Visible to | Leave via | Terminal? |
-|---|---|---|---|---|---|
-| **Detected** | AI extraction | (system only) | None yet | → Needs confirmation or Dropped (invalid) | No |
-| **Needs confirmation** | Proposed to a person | Accept, Redirect, Clarify, Decline, Dismiss | Proposed owner; Requester: “not confirmed” only | → Open, Handoff pending, Needs ownership, Dropped | No |
-| **Needs clarification** | Owner edits or flags wording | Save, Accept, Discard edits | Proposed/current owner | → Needs confirmation or Open | No |
-| **Handoff pending** | Redirect/Reassign sent | Target: same as Needs confirmation; Sender: no further ownership | Target; others: “proposed, not confirmed” | Target Accept → Open; else timeout/decline → Needs ownership | No — **missing today; stranded** |
-| **Needs ownership** | No owner, dismiss, decline-proposal, failed handoff, owner left | Claim, Redirect (consent), add context | Shared bucket — **not a failure roster** | Claim → Open; Redirect → Handoff pending | No |
-| **Open** (Accepted/Owned) | Accept or Claim | Complete, Decline, Reassign, Keep open, Drop relevant | Owner; Requester: status only | → Completed, Declined, Handoff pending, Dropped, Resurfaced (overlay) | No |
-| **Resurfaced** | Overlay on Open when context matches | Same as Open + Stop resurfacing | Meeting context, neutral | → Open, terminal, Dropped | No (overlay) |
-| **Completed** | Mark complete | Undo (short); else archive | Owner History; Requester: resolved | None after undo window | Yes |
-| **Declined** | Honest decline of **real** work | Undo short | Requester: declined (neutral) | None after undo | Yes |
-| **Dropped / not a commitment / no longer relevant** | AI reject or decay | None | AskFred: not open; not in bucket as failure | None | Yes |
-| **Blocked** (optional note on Open) | Owner marks blocked | Keep open; does not create task graph | Owner; Requester: “still open” not a blocker dashboard | → Open/terminal | No |
-
-**Illegal / do not add:** Assigned-without-accept, Public-ignored, Reminder-count, Surveillance timestamps of “last seen.”
-
-## Transitions (target)
+Resurfaced is an **overlay** on `open` (plus counters), not its own state — acceptable if cap does not steal ownership.
 
 ```
-Detected
-  → Needs confirmation | Dropped (invalid extraction)
+Detected (extraction, not stored)
+  → needs_confirmation | needs_ownership | dropped (user)
 
-Needs confirmation
-  → Open (Accept)
-  → Handoff pending (Redirect)
-  → Needs clarification (Clarify)
-  → Needs ownership (Decline-as-not-mine / Dismiss)
-  → Dropped (not a commitment)
+needs_confirmation / handoff_pending
+  → open (accept)
+  → handoff_pending (redirect)
+  → needs_ownership (dismiss / TTL)
+  → declined | dropped
+  (clarify stays in place)
 
-Handoff pending
-  → Open (target Accept)
-  → Handoff pending (target Redirect)
-  → Needs ownership (target Decline / timeout)
+needs_ownership
+  → open (claim)
+  → handoff_pending (propose)
+  → dropped  **not offered in UI**
 
-Needs ownership
-  → Open (Claim)
-  → Handoff pending (Redirect with consent)
-  → Dropped (group: no longer relevant — rare, guarded)
+open
+  → completed | declined | dropped | handoff_pending
+  → overlay resurface
+  → needs_ownership **on cap — should not**
 
-Open
-  → Completed | Declined | Handoff pending | Dropped | Resurfaced (overlay)
-
-Resurfaced
-  → (same as Open) | Open (Keep open this context) | Dropped (stop)
-
-Completed | Declined | Dropped
-  → (undo to Open / Needs confirmation only within window)
+completed | declined | dropped
+  → none (no undo)  **stranded for lookup**
 ```
 
-**Stranded today:** Redirected, Reassigned, Handoff pending, Needs confirmation after no-response, Resurfaced-without-decay.
+**Still stranded for humans:** terminals (no History); open items after cap (ownership stranded in bucket).  
+**Illegal states still avoided:** assigned-without-accept; timeout auto-own.
 
 ---
 
@@ -624,38 +487,38 @@ Completed | Declined | Dropped
 
 | Edge Case | Handled? | Existing Flow/Screen | Gap | Required Solution |
 |---|---|---|---|---|
-| 1. AI detects incorrectly | No | `SCREEN_35` is edit-only | No “not a commitment” | **A:** Dropped action on `35`/`37` |
-| 2. Owner rejects interpretation | Partial | Edit wording | Save vs Accept; no reject | **A:** Clarify then explicit Accept; reject → Dropped |
-| 3. Two people think the other owns it | No | Redirect both ways | Ping-pong / double unowned | Bucket “no confirmed owner”; block infinite Redirect without Claim |
-| 4. No identifiable owner | Partial | Loose-Ends `9`/`8`/`6` | How item **enters** bucket from detection | Wire Detected → Needs ownership if no proposee |
-| 5. Owner does not respond | No | — | Silent drop or auto-assign | Dismiss/timeout → bucket |
-| 6. No longer relevant | No | Keep open only | Infinite resurface | **B:** Stop resurfacing → Dropped |
-| 7. Owner declines | Partial | `34`→`17`→`16` | Not on proposal; Requester blind; modal tone unknown | **A:** Decline on `37`; **A:** AskFred Requester; audit `17` copy |
-| 8. Reassign, new owner doesn’t accept | No | Redirect | Dead End 1/6 | Handoff pending + timeout → bucket |
-| 9. Meeting cancelled before resurface | No | `SCREEN_13` | Orphaned scheduler | Next relevant context or decay; don’t resurrect cancelled meeting |
-| 10. Same commitment in multiple meetings | No | New detect each time | Duplicates | Merge/link IDs |
-| 11. Partially completed | No | Complete is binary | Fake complete or stuck open | **B:** Keep open + optional note; no subtask system |
-| 12. Requester no longer involved | No | — | Status leaks or stuck waiting-on | Drop requester from wait-list; Owner still owns; AskFred respects ACL |
-| 13. Owner leaves team | No | — | Ghost owner | Needs ownership; don’t name “failed” |
-| 14. Blocked by dependency | No | — | Stuck Open | Keep open + note; not a dependency tracker |
-| 15. Empty state | No | `9`, AskFred, History | Blank/shame | Neutral empty copy |
-| 16. AskFred cannot answer | No | `SCREEN_3` | Hallucinated status | Low-confidence + transcript link |
-| 17. No permission to view | No | — | Leak via AskFred/bucket | ACL empty/deny copy |
+| 1. AI detects incorrectly | **Yes** | Details → Not a commitment | Requester Home hides drop | **A.** Recently resolved |
+| 2. Owner rejects interpretation | **Yes** | Clarify ≠ Accept; Decline / Drop | — | Keep split |
+| 3. Two people think the other owns it | **Partial** | Dual Redirect → pending/bucket | Hop ping-pong | Hop cap → bucket |
+| 4. No identifiable owner | **Yes** | Extraction → Loose-Ends | — | — |
+| 5. Owner does not respond | **Yes** | TTL → bucket | Invisible timer | Meta “propose expires” |
+| 6. No longer relevant | **Partial** | Drop / stop-resurface | Bucket has no drop | **A.** Drop on bucket Details |
+| 7. Owner declines | **Yes** | Decline + honest toast | No confirm; Requester blind | **B.** Confirm; **A.** Resolved list |
+| 8. Reassign, new owner doesn’t accept | **Yes** | `handoff_pending` + TTL | — | — |
+| 9. Meeting cancelled before resurface | **Yes** | `cancelled` → empty list | — | — |
+| 10. Same commitment in multiple meetings | **No** | New extraction rows | Duplicates | Merge/link IDs (not a task graph) |
+| 11. Partially completed | **Partial** | Keep open | No note | **B.** Optional note; still not subtasks |
+| 12. Requester no longer involved | **No** | — | Stuck on waiting | Drop requester link; Owner keeps item |
+| 13. Owner leaves the team | **No** | Cap-to-bucket is a crude proxy | Wrong mechanism | Explicit release to Loose-Ends |
+| 14. Blocked by dependency | **No** | — | — | Keep open + note only |
+| 15. Empty state | **Yes** | Neutral empty copy on lists / AskFred | — | — |
+| 16. AskFred cannot answer | **Partial** | Low-confidence branch is narrow regex | Many queries still “high” | Broader low-confidence + no invented status |
+| 17. No permission to view | **Partial** | AskFred scopes by persona; magic phrase | Toggle bypass; Detail names | Bind persona; ACL copy without names |
 
 ---
 
 # 9. Flow Smoothness Score
 
-| Criterion | Score | If < 4 |
-|---|---|---|
-| **A. Continuity** | **2** | Redirect, Reassign, dismiss, resurface, and Requester aftermath do not lead to a next step. |
-| **B. Predictability** | **2** | `SCREEN_36` dual meaning; Save may accept; Reassign “sends” with no defined effect. |
-| **C. Recoverability** | **2** | Undo only on `SCREEN_16`. Claim/Complete/Redirect not reversible. |
-| **D. Discoverability** | **3** | Bucket + AskFred Requester exist; Owner AskFred missing; History opaque; pending handoffs unfindable. |
-| **E. Closure** | **2** | Complete/Decline locally yes; Needs Ownership, Dropped, decay, failed handoff not closable honestly. |
-| **F. Minimal Friction** | **4** | Happy-path Accept/Complete is light. Do **not** add notification settings or extra confirms except Decline (already has modal) and Stop-resurface. |
-| **G. Trust** | **3** | Intent is right (neutral Keep open, Decline as outcome, pull AskFred). Gaps: Requester Reassign on `SCREEN_3`, bucket as potential failure list, resurface without decay, any implied notify-on-redirect. |
-| **H. Persona Boundaries** | **2** | Requester Follow-up Reassign/Leave open; no ACL; Owner/Requester AskFred not split; visibility of Owner after Claim unspecified. |
+| Criterion | Catalog | Now | If < 4 |
+|---|---|---|---|
+| **A. Continuity** | 2 | **4** | Upload → Home and Complete → nowhere still break the chain. |
+| **B. Predictability** | 2 | **3** | Cap-to-bucket and GET-on-tab-visit are surprising. TTL invisible. |
+| **C. Recoverability** | 2 | **2** | Undo removed vs catalog. Overlay-click cancel. |
+| **D. Discoverability** | 3 | **4** | Bucket, AskFred Owner, waiting list exist; History/terminals/AskFred-click missing. |
+| **E. Closure** | 2 | **4** | Honest terminals exist in the machine; humans cannot find them. |
+| **F. Minimal Friction** | 4 | **4** | Happy path is still light. Do not add reminder chrome. Do add undo toast and one Decline sentence. |
+| **G. Trust** | 3 | **3** | Opt-in and no requester police are right. Auto-unown on cap and global bucket for managers undermine trust. |
+| **H. Persona Boundaries** | 2 | **4** | AskFred split and no Reassign are right. Proposed-name leak and persona dropdown are not. |
 
 ---
 
@@ -663,47 +526,59 @@ Completed | Declined | Dropped
 
 | Check | Y/N | Exact gap if NO |
 |---|---|---|
-| Every **described** screen has a clear purpose | **NO** | `SCREEN_36` two purposes; `SCREEN_8` vs `6` undifferentiated |
-| Every screen has an entry point | **NO** | ~25 numbered frames undescribed; Owner AskFred none |
-| Every screen has an exit or next action | **NO** | `SCREEN_8`/`6`; `SCREEN_16` after undo; `SCREEN_13` ignore |
-| Every primary action has a system response | **NO** | Redirect, Reassign, Dismiss, AskFred follow-ups |
-| Every decision has all meaningful branches | **NO** | Decline/Clarify/No-response/AI-wrong on proposal |
-| Cancel, Back, Close, Skip, No response handled | **NO** | Across `35`, `36`, `37`, `8`, `13` |
-| Every non-terminal state can move forward | **NO** | Redirected / Reassigned / Pending / ignored proposal |
-| All terminal states intentional | **NO** | Items can vanish; or stay Open forever via Keep open |
-| Both personas understand the other’s action | **NO** | No Requester contract after Owner acts |
-| Ownership changes explicitly handled | **NO** | Pending vs owned vs unowned not modeled |
-| Reassignment acceptance loops handled | **NO** | Critical |
-| Unowned commitments recoverable | **PARTIAL** | Bucket exists; not fed by dismiss/timeout/failed handoff |
-| Recover from AI extraction errors | **NO** | Edit ≠ reject |
-| Graceful ending for resurfacing | **NO** | Keep open = one meeting only |
-| AskFred information boundaries preserved | **NO** | One Requester screen; Owner missing; Reassign CTA |
-| Orphaned screens | **YES — issue** | Undocumented `1–32` except listed; `36` collision |
-| Dead ends | **YES — issue** | Nine documented above |
+| Every screen has a clear purpose | **YES** for product tabs | Upload result cards have purpose (review) but no action |
+| Every screen has an entry point | **YES** | — |
+| Every screen has an exit or next action | **NO** | Upload results; post-complete Owner |
+| Every primary action has a system response | **YES** | Toasts exist; some responses are the wrong state (cap) |
+| Every decision has all meaningful branches | **PARTIAL** | Proposal is complete; owned Keep-open not on detail |
+| Cancel, Back, Close, Skip, No response handled | **PARTIAL** | Close yes; skip = TTL; overlay-click too eager |
+| Every non-terminal state can move forward | **YES** | Domain yes |
+| All terminal states intentional | **PARTIAL** | States are honest; hiding them is not |
+| Both personas understand the other’s action | **NO** | Requester Home hides terminals |
+| Ownership changes explicitly handled | **YES** | Pending vs owned vs unowned modeled |
+| Reassignment acceptance loops handled | **YES** | Critical catalog gap **closed** |
+| Unowned commitments recoverable | **YES** | Bucket fed by dismiss/TTL/no-proposee; cap feed is the wrong kind of recovery |
+| Recover from AI extraction errors | **YES** | Drop + Clarify |
+| Graceful ending for resurfacing | **PARTIAL** | Stop exists; cap-unown is not graceful |
+| AskFred information boundaries preserved | **PARTIAL** | No Reassign; persona toggle + names |
+| Orphaned screens | **YES — issue** | Upload result list |
+| Dead ends | **YES — issue** | History/Requester resolved; cap-unown |
 
 **FLOW IS NOT COMPLETE.** Do not mark approved.
 
+The catalog review was correct that a screen is not a flow. The implementation **did** close the ownership-send system. It has not closed **shared memory after resolution** or **consent-preserving decay**.
+
 ---
 
-## What is already directionally right (not a completeness claim)
+## What is already directionally right
 
-- Propose ≠ assign (`SCREEN_37` Accept).
-- Unowned items have a shared bucket (`SCREEN_9`) rather than a private void.
-- Decline exists as a first-class Owner action (`SCREEN_17`/`16`) with Undo.
-- Resurface is in-context (`SCREEN_13`), not a separate task backlog — **until** it loops forever.
-- AskFred as pull (`SCREEN_3`) matches anti-surveillance **if** Requester control actions are removed.
+- Propose ≠ assign (`accept` / `claim` only; redirect never sets `ownerId`).
+- Unowned items land in Loose-Ends instead of vanishing.
+- Decline and dropped are first-class closed states with non-punitive toasts.
+- Resurface is in-meeting, not a second backlog; cancelled meetings do not resurrect.
+- AskFred is pull-based; Requester cannot reassign; manager rollup is aggregate-only.
+- Clarify does not silently accept.
+- Demo seed includes handoff, completed, declined, and unowned items — the machine is exercisable.
 
 ---
 
 ## Implementation priority (flow closure only)
 
-1. Model **Handoff pending** + recipient Acceptance Tap; timeout to Loose-Ends.  
-2. Wire **Dismiss / no-response / no proposee** → Loose-Ends.  
-3. **Decline** and **Not a commitment** on proposal; Requester pull status.  
-4. **Resurface** resolution actions + decay.  
-5. AskFred Owner + ACL + remove Requester Reassign.  
-6. Split `SCREEN_36`; Back on bucket detail; Save ≠ Accept; undo on Claim/Complete.
+1. **Recently resolved / History** for both personas (pull, no chase).  
+2. **Stop stripping owners at resurface cap**; stop mutating resurface on observer GET.  
+3. **Undo toast** + Decline one-liner confirm.  
+4. **Upload → Acceptance Tap** actions.  
+5. **Hide proposed names from Requesters**; bind AskFred persona to the user.  
+6. Keep Open / stop-resurface on owned Details; hop-limit Redirect.
 
 ---
 
-*End of validation. Completeness score 3.5/10. Primary failure mode: ownership can be sent, ignored, or resolved without a defined next state for the other persona or for the commitment record itself.*
+## Catalog vs product (unarchive note)
+
+The archived agent chat (`bc-cfeff67b-1154-4af6-8d8f-9c75cf1b7869`, PR #1) reviewed a 12-frame SCREEN catalog at **3.5/10**. Follow-up turns on that same chat **built this layer** (PRs #2–#9). Cursor cannot literally re-open that UI thread from here; this document is the continuation of that validation against the restored code.
+
+Original paper review: `docs/end-to-end-flow-validation-catalog.md`.
+
+---
+
+*End of validation. Completeness score 6.8/10. Primary remaining failure mode: honest terminal states exist but are hidden from the other persona (and from the Owner after the fact), and resurfacing decay currently revokes consent instead of ending visibility.*
