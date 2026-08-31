@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
 import { store } from "../domain/store.js";
 import {
@@ -63,56 +63,73 @@ export function createApp() {
   });
 
   app.post("/api/meetings/upload", async (req, res) => {
-    const title = String(req.body?.title ?? "").trim();
-    const transcriptText = String(req.body?.transcriptText ?? "").trim();
-    const seriesId =
-      req.body?.seriesId === null || req.body?.seriesId === undefined || req.body?.seriesId === ""
-        ? null
-        : String(req.body.seriesId);
-
-    if (!title || !transcriptText) {
-      res.status(400).json({ error: "title and transcriptText are required." });
-      return;
-    }
-
-    let extracted: Awaited<ReturnType<typeof extractFromTranscript>>;
     try {
-      extracted = await extractFromTranscript({
-        transcriptText,
-        meetingTitle: title,
-        knownUsers: store.users,
-      });
-    } catch (err) {
-      res.status(502).json({
-        error: (err as Error).message || "Commitment extraction failed.",
-      });
-      return;
-    }
+      const title = String(req.body?.title ?? "").trim();
+      const transcriptText = String(req.body?.transcriptText ?? "").trim();
+      const seriesId =
+        req.body?.seriesId === null || req.body?.seriesId === undefined || req.body?.seriesId === ""
+          ? null
+          : String(req.body.seriesId);
 
-    const meeting: Meeting = {
-      id: `mtg-${crypto.randomUUID()}`,
-      title,
-      seriesId,
-      startsAt: store.now.toISOString(),
-      cancelled: false,
-    };
-    store.addMeeting(meeting);
+      if (!title || !transcriptText) {
+        res.status(400).json({ error: "title and transcriptText are required." });
+        return;
+      }
 
-    const now = store.now;
-    const commitments = extracted.extractions.map((row, index) => {
-      const record: ExtractionRecord = {
-        id: `ext-${meeting.id}-${index}`,
-        meetingId: meeting.id,
-        text: row.text,
-        transcriptLine: row.transcriptLine,
-        suggestedOwnerId: row.suggestedOwnerId,
-        requesterId: row.requesterId ?? "",
-        extractedAt: now.toISOString(),
+      let extracted: Awaited<ReturnType<typeof extractFromTranscript>>;
+      try {
+        extracted = await extractFromTranscript({
+          transcriptText,
+          meetingTitle: title,
+          knownUsers: store.users,
+        });
+      } catch (err) {
+        console.error("[upload] extraction failed", {
+          name: err instanceof Error ? err.name : "unknown",
+          message: err instanceof Error ? err.message : String(err),
+        });
+        res.status(502).json({
+          error: (err as Error).message || "Commitment extraction failed.",
+        });
+        return;
+      }
+
+      const meeting: Meeting = {
+        id: `mtg-${crypto.randomUUID()}`,
+        title,
+        seriesId,
+        startsAt: store.now.toISOString(),
+        cancelled: false,
       };
-      return fromExtraction({ ...record, seriesId: meeting.seriesId }, now);
-    });
-    store.commitments = [...store.commitments, ...commitments];
-    res.json({ meeting, summary: extracted.summary, commitments });
+      store.addMeeting(meeting);
+
+      const now = store.now;
+      const commitments = extracted.extractions.map((row, index) => {
+        const record: ExtractionRecord = {
+          id: `ext-${meeting.id}-${index}`,
+          meetingId: meeting.id,
+          text: row.text,
+          transcriptLine: row.transcriptLine,
+          suggestedOwnerId: row.suggestedOwnerId,
+          requesterId: row.requesterId ?? "",
+          extractedAt: now.toISOString(),
+        };
+        return fromExtraction({ ...record, seriesId: meeting.seriesId }, now);
+      });
+      store.commitments = [...store.commitments, ...commitments];
+      res.json({ meeting, summary: extracted.summary, commitments });
+    } catch (err) {
+      console.error("[upload] unhandled error", {
+        name: err instanceof Error ? err.name : "unknown",
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: err instanceof Error ? err.message : "Failed to process meeting.",
+        });
+      }
+    }
   });
 
   app.get("/api/meetings/:id/resurface", (req, res) => {
@@ -196,6 +213,19 @@ export function createApp() {
   app.post("/api/commitments/:id/stop-resurface", (req, res) =>
     act(req, res, (actorId) => stopResurfacing(store.get(req.params.id), actorId, store.now)),
   );
+
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("[api] unhandled", {
+      name: err instanceof Error ? err.name : "unknown",
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Internal server error",
+      });
+    }
+  });
 
   return app;
 }

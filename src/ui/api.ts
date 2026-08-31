@@ -68,9 +68,24 @@ async function json<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? "Request failed");
-  return body as T;
+  const raw = await res.text();
+  let data: { error?: string } | null;
+  try {
+    data = raw ? (JSON.parse(raw) as { error?: string }) : null;
+  } catch {
+    throw new Error(
+      `Server returned an unreadable response (status ${res.status}). Check the server terminal for a crash log.`,
+    );
+  }
+  if (!res.ok || !data) {
+    throw new Error(
+      data?.error ||
+        (raw
+          ? `Request failed with status ${res.status}.`
+          : `API returned an empty ${res.status} response. The API process may be down — check the server terminal.`),
+    );
+  }
+  return data as T;
 }
 
 export const api = {
