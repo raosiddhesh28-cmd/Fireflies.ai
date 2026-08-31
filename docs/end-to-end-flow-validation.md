@@ -24,7 +24,7 @@ This is not a redesign. It maps the **connected system that now exists**, then f
 | **Overall Flow Completeness Score** | **3.5 / 10** | **6.5 / 10** |
 | Complete flows (entry → intentional end, both personas where required) | 2 | **9** |
 | Missing flows | 11 | **7** |
-| Dead ends | 9 | **5** |
+| Dead ends | 9 | **6** |
 | Missing states | 7 | **2** (History / undo window; blocked-or-partial note) |
 | Orphan screens | ~25 undescribed frames | **1** (Upload result cards have no actions) |
 | Required screen additions | 3 | **2** (Owner/Requester History; post-upload Acceptance Tap handoff) |
