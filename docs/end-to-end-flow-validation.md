@@ -21,7 +21,7 @@ This is not a redesign. It maps the **connected system that now exists**, then f
 
 | Metric | Catalog (2026-08-29) | Implemented (this review) |
 |---|---|---|
-| **Overall Flow Completeness Score** | **3.5 / 10** | **6.8 / 10** |
+| **Overall Flow Completeness Score** | **3.5 / 10** | **6.5 / 10** |
 | Complete flows (entry → intentional end, both personas where required) | 2 | **9** |
 | Missing flows | 11 | **7** |
 | Dead ends | 9 | **5** |
@@ -30,7 +30,7 @@ This is not a redesign. It maps the **connected system that now exists**, then f
 | Required screen additions | 3 | **2** (Owner/Requester History; post-upload Acceptance Tap handoff) |
 | Required existing-screen or modal modifications | 9 | **6** |
 
-**Why 6.8, not 9:** The original critical holes — **Handoff pending**, **dismiss/timeout → Loose-Ends**, **Decline and Not-a-commitment on the proposal**, **recipient Acceptance Tap**, **resurface decay (max 2 → bucket)**, **AskFred Owner vs Requester split**, **no requester Reassign** — are implemented in the state machine and on the corresponding surfaces. Completeness is no longer blocked by an unmodeled ownership send.
+**Why 6.5, not 9:** The original critical holes — **Handoff pending**, **dismiss/timeout → Loose-Ends**, **Decline and Not-a-commitment on the proposal**, **recipient Acceptance Tap**, **resurface decay (max 2 → bucket)**, **AskFred Owner vs Requester split**, **no requester Reassign** — are implemented in the state machine and on the corresponding surfaces. Completeness is no longer blocked by an unmodeled ownership send.
 
 **Why not approve:** Requester **cannot see terminal outcomes on Home** (completed / declined / dropped are filtered out of “You’re waiting on”). Owner has **no History**. **Undo does not exist**. Keep Open / stop-resurface live **only** on Next meeting, not on the owned-item detail. Hitting the resurface cap **strips `ownerId` and dumps the item in Loose-Ends** with no owner-facing explanation. Detail for a requester still **names the proposed person**. Those are still connected-system failures.
 
@@ -41,7 +41,7 @@ This is not a redesign. It maps the **connected system that now exists**, then f
 3. Redirect → `handoff_pending` → target sees Acceptance Tap → Accept or Decline or Send to loose ends.
 4. Dismiss / 3-day TTL → `needs_ownership` → Loose-Ends → Claim.
 5. Extraction with no suggested owner → Loose-Ends.
-6. Next meeting resurface (owner) → Complete / Decline / Keep open (this meeting) / Don’t bring this up again (`dropped`).
+6. Next meeting resurface (owner) → Complete / Decline / Keep open / Don’t bring this up again — **only if the item still has `resurfaceCount < 2` after the mutating GET** (seeded `ext-4` fails this on first visit).
 7. AskFred Owner: open/proposed items, pull-only, no assign CTA.
 8. AskFred Requester: waiting items with “ownership not confirmed” vs “acknowledged”, no Reassign.
 9. Manager Team rollup: aggregate rates only; privacy lock rejects individual fields.
@@ -180,9 +180,9 @@ Surfaces in this product (catalog mapping):
 
 **IF Don’t bring this up again:** `dropped` (not a performance miss in toast). **OK graceful stop.**
 
-**IF ignore the tab:** Count still increments because **opening the tab visits the endpoint**. A curious Requester or Manager viewing Next meeting burns a resurface for the Owner. **Broken junction.**
+**IF ignore / merely open the tab:** Count still increments because **opening the tab visits `GET /resurface`**. A curious Requester or Manager viewing Next meeting burns a resurface for the Owner. **Broken junction.** Live check: seeded `ext-4` had `resurfaceCount: 1`; one GET incremented to 2, then `unresolvedForRecurringMeeting` requires `resurfaceCount < MAX_RESURFACES` (2), so the **card was not shown at all**. The last allowed resurface is consumed and hidden on the same request. **Dead end: Owner never sees the 2nd in-meeting prompt.**
 
-**IF `resurfaceCount >= MAX_RESURFACES` (2):** `markResurfaced` sets `needs_ownership` and **clears ownerId**. Item leaves You own and appears in Loose-Ends. Owner is not told why. **This is a silent ownership revocation — High severity, anti-trust if it feels like punishment.**
+**IF `resurfaceCount >= MAX_RESURFACES` (2):** `markResurfaced` sets `needs_ownership` and **clears ownerId**. Item leaves You own and appears in Loose-Ends. Owner is not told why. **This is a silent ownership revocation — High severity, anti-trust if it feels like punishment.** A later GET (after the hidden increment) is what actually un-owns.
 
 **IF meeting.cancelled:** resurface list empty; no resurrection. **OK (edge 9).**
 
@@ -581,4 +581,17 @@ Original paper review: `docs/end-to-end-flow-validation-catalog.md`.
 
 ---
 
-*End of validation. Completeness score 6.8/10. Primary remaining failure mode: honest terminal states exist but are hidden from the other persona (and from the Owner after the fact), and resurfacing decay currently revokes consent instead of ending visibility.*
+## Live verification (this unarchive run)
+
+- `npm test`: **30 passed**.
+- Home as Alex: Acceptance Tap for changelog (`Needs your opt-in` + Accept/Redirect/Decline/Details); You own usage clip (`Open`); You’re waiting on Casey’s empty-state copy (`Ownership not confirmed`). Screenshot: walkthrough `acceptance_tap_home.png`.
+- `GET /api/commitments?userId=blair&view=waiting` still returns **completed** `ext-7` (mute-button hotfix). Home UI **filters terminals out**, so Blair cannot see that resolution without AskFred.
+- `GET /api/meetings/mtg-sync-next/resurface` returned **0 cards** on a fresh seed because increment-then-filter hid `ext-4`. Cancelled meeting correctly returned 0.
+- AskFred Owner for Alex: 2 items (proposal + open), pull-only.
+- Manager rollup: aggregates only (`currentRate` 0.25, no people fields).
+
+Browser click-through of every tab was not available in this environment (computer-use quota). API + Home render were used instead.
+
+---
+
+*End of validation. Completeness score 6.5/10. Primary remaining failure mode: honest terminal states exist but are hidden from the other persona (and from the Owner after the fact), and resurfacing decay currently consumes/hides the last in-meeting prompt and then revokes consent instead of ending visibility.*
