@@ -8,7 +8,7 @@ import {
   type User,
 } from "./api";
 
-type Tab = "home" | "bucket" | "meeting" | "askfred" | "manager";
+type Tab = "home" | "bucket" | "meeting" | "upload" | "askfred" | "manager";
 
 export function App() {
   const [users, setUsers] = useState<User[]>([]);
@@ -27,11 +27,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [resurface, setResurface] = useState<Commitment[]>([]);
   const [askQuery, setAskQuery] = useState("What remains open?");
+  const [askPersona, setAskPersona] = useState<"owner" | "requester">("owner");
   const [askAnswer, setAskAnswer] = useState<AskFredAnswer | null>(null);
   const [rollup, setRollup] = useState<ManagerRollup | null>(null);
 
-  const user = users.find((u) => u.id === userId);
-  const persona = user?.role === "manager" ? "manager" : tab === "manager" ? "manager" : "owner";
   const nextMeeting = meetings.find((m) => m.id === "mtg-sync-next");
 
   const refresh = useCallback(async () => {
@@ -92,8 +91,7 @@ export function App() {
   }
 
   async function ask() {
-    const personaForAsk = user?.role === "manager" ? "manager" : requesterMode(askQuery) ? "requester" : "owner";
-    const answer = await api.askFred(userId, personaForAsk, askQuery);
+    const answer = await api.askFred(userId, askPersona, askQuery);
     setAskAnswer(answer);
   }
 
@@ -130,6 +128,7 @@ export function App() {
             ["home", "Home"],
             ["bucket", "Loose ends"],
             ["meeting", "Next meeting"],
+            ["upload", "Upload"],
             ["askfred", "AskFred"],
             ["manager", "Team rollup"],
           ] as const
@@ -184,13 +183,24 @@ export function App() {
         />
       )}
 
+      {tab === "upload" && (
+        <Upload
+          onProcessed={async () => {
+            const s = await api.session();
+            setMeetings(s.meetings);
+            await refresh();
+          }}
+        />
+      )}
+
       {tab === "askfred" && (
         <AskFred
           query={askQuery}
           setQuery={setAskQuery}
           answer={askAnswer}
           onAsk={ask}
-          persona={persona}
+          askPersona={askPersona}
+          setAskPersona={setAskPersona}
         />
       )}
 
@@ -242,6 +252,112 @@ export function App() {
   );
 }
 
+const TRANSCRIPT_TYPES = [".txt", ".vtt", ".srt"];
+const MEDIA_TYPES = /\.(mp4|mp3|wav|m4a|webm|mov|mpeg|aac|ogg|flac|m4v|avi)$/i;
+
+function Upload(props: { onProcessed: () => Promise<void> }) {
+  const [title, setTitle] = useState("");
+  const [transcriptText, setTranscriptText] = useState("");
+  const [seriesId, setSeriesId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [created, setCreated] = useState<Commitment[]>([]);
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setFileNote(null);
+    const name = file.name.toLowerCase();
+    if (MEDIA_TYPES.test(name) || file.type.startsWith("video/") || file.type.startsWith("audio/")) {
+      setFileNote(
+        "Video/audio files aren't transcribed automatically yet — please paste or upload the transcript text instead.",
+      );
+      return;
+    }
+    const ext = name.slice(name.lastIndexOf("."));
+    if (ext && !TRANSCRIPT_TYPES.includes(ext) && file.type !== "text/plain") {
+      setFileNote(
+        "Video/audio files aren't transcribed automatically yet — please paste or upload the transcript text instead.",
+      );
+      return;
+    }
+    setTranscriptText(await file.text());
+  }
+
+  async function processMeeting() {
+    setError(null);
+    setBusy(true);
+    try {
+      const result = await api.uploadMeeting({
+        title,
+        transcriptText,
+        seriesId: seriesId.trim() ? seriesId.trim() : null,
+      });
+      setSummary(result.summary);
+      setCreated(result.commitments);
+      await props.onProcessed();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="layout">
+      <section className="card">
+        <h2>Upload a transcript</h2>
+        <p className="lede">Paste or upload transcript text. Extraction uses the existing ownership loop — nothing is assigned until someone opts in.</p>
+        <label className="persona">
+          Meeting title
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label className="persona">
+          Recurring series id (optional)
+          <input value={seriesId} onChange={(e) => setSeriesId(e.target.value)} />
+        </label>
+        <textarea
+          value={transcriptText}
+          onChange={(e) => setTranscriptText(e.target.value)}
+          placeholder="Paste transcript text…"
+          rows={12}
+        />
+        <label className="persona">
+          Transcript file
+          <input
+            type="file"
+            accept=".txt,.vtt,.srt,text/plain"
+            onChange={(e) => onFile(e.target.files?.[0])}
+          />
+        </label>
+        {fileNote && <p className="error">{fileNote}</p>}
+        <button disabled={busy || !title.trim() || !transcriptText.trim()} onClick={processMeeting}>
+          {busy ? "Processing…" : "Process meeting"}
+        </button>
+        {error && <p className="error">{error}</p>}
+      </section>
+      {summary && (
+        <section>
+          <h2>Summary</h2>
+          <article className="card">
+            <p>{summary}</p>
+          </article>
+          <h2>Extracted commitments</h2>
+          {created.length === 0 && <Empty text="No forward-looking commitments were found." />}
+          {created.map((c) => (
+            <article key={c.id} className="card">
+              <StatusChip state={c.state} />
+              <h3>{c.text}</h3>
+              <blockquote>“{c.transcriptLine}”</blockquote>
+            </article>
+          ))}
+        </section>
+      )}
+    </main>
+  );
+}
+
 function Home(props: {
   proposed: Commitment[];
   owned: Commitment[];
@@ -265,7 +381,7 @@ function Home(props: {
             <blockquote>“{c.transcriptLine}”</blockquote>
             <p className="meta">Requested in meeting context · {c.redirectedBy ? `Proposed after redirect` : "Proposed from extraction"}</p>
             <div className="actions">
-              <button onClick={() => props.onAccept(c)}>Accept</button>
+              <button className="secondary" onClick={() => props.onAccept(c)}>Accept</button>
               <button className="secondary" onClick={() => props.onRedirect(c)}>
                 Redirect
               </button>
@@ -324,7 +440,7 @@ function LooseEnds(props: {
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <div className="actions">
-              <button onClick={() => props.onClaim(c)}>Claim it</button>
+              <button className="secondary" onClick={() => props.onClaim(c)}>Claim it</button>
               <button className="secondary" onClick={() => props.onRedirect(c)}>
                 Propose someone
               </button>
@@ -362,11 +478,11 @@ function MeetingSurface(props: {
             <h3>{c.text}</h3>
             <blockquote>“{c.transcriptLine}”</blockquote>
             <p className="meta">
-              Owner {props.nameOf(c.ownerId)} · resurfaced {c.resurfaceCount} of 3
+              Owner {props.nameOf(c.ownerId)} · resurfaced {c.resurfaceCount} of 2
             </p>
             {c.ownerId === props.userId ? (
               <div className="actions">
-                <button onClick={() => props.onComplete(c)}>Complete</button>
+                <button className="secondary" onClick={() => props.onComplete(c)}>Complete</button>
                 <button className="ghost" onClick={() => props.onDecline(c)}>
                   Decline
                 </button>
@@ -392,14 +508,27 @@ function AskFred(props: {
   setQuery: (v: string) => string | void;
   answer: AskFredAnswer | null;
   onAsk: () => void;
-  persona: string;
+  askPersona: "owner" | "requester";
+  setAskPersona: (v: "owner" | "requester") => void;
 }) {
   return (
     <main className="layout">
       <section className="card">
         <h2>AskFred</h2>
         <p className="lede">Pull-based. Owners ask what they own. Requesters ask what they’re waiting on. No reminder blast.</p>
-        <textarea value={props.query} onChange={(e) => props.setQuery(e.target.value)} />
+        <div className="ask-row">
+          <label className="persona">
+            Persona
+            <select
+              value={props.askPersona}
+              onChange={(e) => props.setAskPersona(e.target.value as "owner" | "requester")}
+            >
+              <option value="owner">Owner</option>
+              <option value="requester">Requester</option>
+            </select>
+          </label>
+          <textarea value={props.query} onChange={(e) => props.setQuery(e.target.value)} />
+        </div>
         <button onClick={props.onAsk}>Ask</button>
         {props.answer && (
           <div className="answer">
@@ -491,7 +620,7 @@ function Detail(props: {
       <div className="actions">
         {proposedToMe && (c.state === "needs_confirmation" || c.state === "handoff_pending") && (
           <>
-            <button onClick={props.onAccept}>Accept</button>
+            <button className="secondary" onClick={props.onAccept}>Accept</button>
             <button className="secondary" onClick={props.onRedirect}>
               Redirect
             </button>
@@ -511,7 +640,7 @@ function Detail(props: {
         )}
         {isOwner && c.state === "open" && (
           <>
-            <button onClick={props.onComplete}>Complete</button>
+            <button className="secondary" onClick={props.onComplete}>Complete</button>
             <button className="ghost" onClick={props.onDecline}>
               Decline
             </button>
@@ -525,7 +654,7 @@ function Detail(props: {
         )}
         {c.state === "needs_ownership" && (
           <>
-            <button onClick={props.onClaim}>Claim it</button>
+            <button className="secondary" onClick={props.onClaim}>Claim it</button>
             <button className="secondary" onClick={props.onRedirect}>
               Propose someone
             </button>
@@ -596,8 +725,4 @@ function successCopy(action: string, c: Commitment): string {
   if (action === "keep-open") return "Kept open. It will not resurface in this meeting again.";
   if (action === "stop-resurface") return "Stopped resurfacing. Recorded as dropped, not as a performance miss.";
   return `Updated · ${c.state}`;
-}
-
-function requesterMode(query: string) {
-  return /waiting|resolved|status|has this/.test(query.toLowerCase());
 }

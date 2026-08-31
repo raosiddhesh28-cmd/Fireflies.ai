@@ -46,6 +46,11 @@ export class CommitmentStore {
     if (!found) throw new Error("Meeting not found.");
     return found;
   }
+
+  addMeeting(meeting: Meeting): Meeting {
+    this.meetings = [...this.meetings, meeting];
+    return meeting;
+  }
 }
 
 export const store = new CommitmentStore();
