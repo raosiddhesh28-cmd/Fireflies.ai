@@ -1,11 +1,17 @@
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-/** Later files override earlier ones. Shell env still wins. */
+/** Later files override earlier ones. A non-empty shell value still wins. */
 export const SERVER_ENV_FILES = [".env", ".env.development", ".env.local"] as const;
 
-export function loadServerEnv(cwd = process.cwd()): string[] {
+/** Repo root (`src/server/loadEnv.ts` → `../..`), so cwd cannot hide `.env.local`. */
+export function envFilesRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+}
+
+export function loadServerEnv(cwd = envFilesRoot()): string[] {
   let config: (opts: { path: string; override: boolean }) => void;
   try {
     config = createRequire(import.meta.url)("dotenv").config;
@@ -26,7 +32,8 @@ export function loadServerEnv(cwd = process.cwd()): string[] {
     loaded.push(name);
   }
   for (const [key, value] of Object.entries(preset)) {
-    if (value !== undefined) process.env[key] = value;
+    // Empty shell/export ANTHROPIC_API_KEY= must not wipe `.env.local`.
+    if (value !== undefined && value !== "") process.env[key] = value;
   }
   return loaded;
 }

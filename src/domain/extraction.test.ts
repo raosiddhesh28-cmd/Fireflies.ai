@@ -51,8 +51,30 @@ describe("extractFromTranscript", () => {
     expect(result.extractions[0].suggestedOwnerId).toBe("alex");
     expect(result.extractions[0].requesterId).toBe("blair");
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("https://api.anthropic.com/v1/messages");
-    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+    const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers["anthropic-workspace-id"]).toBeUndefined();
+    const body = JSON.parse(String(init.body));
     expect(body.model).toBe("claude-sonnet-4-6");
+  });
+
+  it("sends anthropic-workspace-id when ANTHROPIC_WORKSPACE_ID is set", async () => {
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    process.env.ANTHROPIC_WORKSPACE_ID = "wrkspc_01TestWorkspaceId000000000";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(anthropicOk(JSON.stringify({ summary: "s", commitments: [] }))),
+    );
+
+    await extractFromTranscript({
+      transcriptText: "Alex: I'll do it.",
+      meetingTitle: "Weekly Product Sync",
+      knownUsers: USERS,
+    });
+
+    const sent = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>;
+    expect(sent["anthropic-workspace-id"]).toBe("wrkspc_01TestWorkspaceId000000000");
+    delete process.env.ANTHROPIC_WORKSPACE_ID;
   });
 
   it("leaves suggestedOwnerId null when the speaker does not match a known user", async () => {

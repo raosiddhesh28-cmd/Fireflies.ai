@@ -96,20 +96,26 @@ export async function extractFromTranscript(input: {
   meetingTitle: string;
   knownUsers: User[];
 }): Promise<{ summary: string; extractions: TranscriptExtraction[] }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not set.");
+  }
+
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+  if (workspaceId) {
+    headers["anthropic-workspace-id"] = workspaceId;
   }
 
   let response: Response;
   try {
     response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+      headers,
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 4096,
@@ -128,6 +134,11 @@ export async function extractFromTranscript(input: {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
+    if (/anthropic-workspace-id is required/i.test(detail)) {
+      throw new Error(
+        "This Anthropic key is identity-linked and needs a workspace id. Copy the wrkspc_… value from https://platform.claude.com/settings/workspaces into ANTHROPIC_WORKSPACE_ID in .env.local and restart the API.",
+      );
+    }
     throw new Error(
       `Extraction model returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : "."}`,
     );

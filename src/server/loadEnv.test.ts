@@ -35,6 +35,16 @@ describe("loadServerEnv", () => {
     expect(process.env.ANTHROPIC_API_KEY).toBe("from-shell");
   });
 
+  it("lets .env.local fill an empty shell ANTHROPIC_API_KEY", () => {
+    process.env.ANTHROPIC_API_KEY = "";
+    const dir = mkdtempSync(join(tmpdir(), "load-env-"));
+    writeFileSync(join(dir, ".env.local"), "ANTHROPIC_API_KEY=from-local\n");
+
+    loadServerEnv(dir);
+
+    expect(process.env.ANTHROPIC_API_KEY).toBe("from-local");
+  });
+
   it("skips missing files", () => {
     delete process.env.ANTHROPIC_API_KEY;
     const dir = mkdtempSync(join(tmpdir(), "load-env-"));
